@@ -2207,7 +2207,7 @@ ${body}
                 if (!confirm('Remove this shared workspace?')) return;
                 this.state.sharedWorkspaces = this.state.sharedWorkspaces.filter(w => w.shareId !== shareId);
                 this.saveState();
-                if (this.activeCollab === shareId) this.exitCollabMode();
+                if (this.activeCollab === shareId) this.exitCollabMomade();
                 else this.renderCollabSidebar();
             };
     
@@ -2287,14 +2287,13 @@ ${body}
                 `);
             };
     
+
             // ═══════ COLLAB VIEWS ═══════════════════════════════════
             ViewRenderer.renderCollabWorkspace = function(main) {
                 const ws = App.state.sharedWorkspaces.find(w => w.shareId === App.activeCollab);
                 if (!ws) { App.exitCollabMode(); return; }
                 const isManager = ws.role === 'manager';
-                const data = ws.data;
                 const subView = App.collabSubView || 'dashboard';
-    
                 main.innerHTML = `
                     <div class="collab-banner">
                         <div class="collab-banner-info">
@@ -2305,7 +2304,7 @@ ${body}
                             </div>
                         </div>
                         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-                            ${isManager ? '<button class="btn" onclick="ViewRenderer.exportCollabUpdates(\''+ws.shareId+'\')"><svg class="icon" style="width:14px;height:14px;"><use href="#i-download"></use></svg> Export Updates</button>' : ''}
+                            ${isManager ? '<button class="btn" onclick="ViewRenderer.exportCollabUpdates(\''+ws.shareId+'\')"><svg class="icon" style="width:14px;height:14px;"><use href="#i-download"></use></svg> Export JSON</button>' : ''}
                             <button class="btn" onclick="if(confirm('Remove this workspace?'))App.removeCollabWorkspace('${ws.shareId}')" style="color:#ef4444;border-color:rgba(239,68,68,0.4);">Remove</button>
                             <button class="btn" onclick="App.exitCollabMode()">← My Workspace</button>
                         </div>
@@ -2317,13 +2316,12 @@ ${body}
                     </div>
                     <div id="collabContent"></div>
                 `;
-    
                 const el = document.getElementById('collabContent');
-                if (subView === 'dashboard') this.renderCollabDashboard(el, data, ws);
-                else if (subView === 'kanban') this.renderCollabKanban(el, data, ws, isManager);
-                else if (subView === 'database') this.renderCollabDatabase(el, data);
+                if (subView === 'dashboard') this.renderCollabDashboard(el, ws.data, ws);
+                else if (subView === 'kanban') this.renderCollabKanban(el, ws, isManager);
+                else if (subView === 'database') this.renderCollabDatabase(el, ws, isManager);
             };
-    
+
             ViewRenderer.renderCollabDashboard = function(el, data, ws) {
                 const tasks = (data.notes||[]).filter(n=>!n.archived);
                 const clients = data.clients||[];
@@ -2332,59 +2330,59 @@ ${body}
                 let earned=0, pending=0, completedVids=0, pendingVids=0;
                 tasks.forEach(t => {
                     const client = clients.find(c=>c.id===t.clientId);
-                    const rev = client&&client.paymentType==='monthly' ? 0 : (t.pricingType==='per_video'?(t.videos||0)*(t.price||0):(t.price||0));
+                    const rev = client&&client.paymentType==='monthly' ? (t.status==='Completed'?0:0) : (t.pricingType==='per_video'?(t.videos||0)*(t.price||0):(t.price||0));
                     if (t.status==='Completed') { earned+=rev; completedVids+=(t.videos||0); }
                     else { pending+=rev; pendingVids+=(t.videos||0); }
                 });
-                clients.filter(c=>c.paymentType==='monthly').forEach(c => {
-                    const cTasks = tasks.filter(t=>t.clientId===c.id&&t.status==='Completed');
-                    const months = new Set(cTasks.map(t=>{const d=new Date(t.completedDate||Date.now());return d.getMonth()+'_'+d.getFullYear();}));
-                    earned += months.size*(c.monthlySalary||0);
+                // monthly salary clients
+                const monthlyClients = clients.filter(c=>c.paymentType==='monthly');
+                monthlyClients.forEach(client => {
+                    const ct = tasks.filter(t=>t.clientId===client.id&&t.status==='Completed');
+                    const months = new Set(ct.map(t=>{const d=new Date(t.completedDate||Date.now());return d.getMonth()+'_'+d.getFullYear();}));
+                    if (ct.length>0) earned += months.size*(client.monthlySalary||0);
                 });
-                el.innerHTML = `
-                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px;">
-                        <div class="card" style="border-left:4px solid #f59e0b;"><div style="color:var(--text-secondary);font-size:0.8rem;text-transform:uppercase;">Pending Videos</div><div style="font-size:2rem;font-weight:bold;">${pendingVids}</div></div>
-                        <div class="card" style="border-left:4px solid #10b981;"><div style="color:var(--text-secondary);font-size:0.8rem;text-transform:uppercase;">Completed Videos</div><div style="font-size:2rem;font-weight:bold;">${completedVids}</div></div>
-                        <div class="card" style="border-left:4px solid #6366f1;"><div style="color:var(--text-secondary);font-size:0.8rem;text-transform:uppercase;">Total Earned</div><div style="font-size:2rem;font-weight:bold;">${fmt(earned)}</div></div>
-                        <div class="card" style="border-left:4px solid #ef4444;"><div style="color:var(--text-secondary);font-size:0.8rem;text-transform:uppercase;">Pending Amount</div><div style="font-size:2rem;font-weight:bold;">${fmt(pending)}</div></div>
-                    </div>
-                    <h3 style="margin-bottom:12px;font-size:0.9rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px;">Recent Tasks</h3>
-                    <div class="notes-grid">${tasks.slice(0,8).map(t=>{
-                        const cl=clients.find(c=>c.id===t.clientId);
-                        return `<div class="card" style="${cl?'border-left:4px solid '+cl.color+';':''}">
-                            <h3 style="font-size:1rem;margin-bottom:4px;">${Utils.escapeHtml(t.title)||'Untitled'}</h3>
-                            <div style="font-size:0.8rem;color:var(--text-secondary);">${cl?cl.name:'No Client'}</div>
-                            <div style="margin-top:6px;font-size:0.8rem;padding-top:6px;border-top:1px solid rgba(128,128,128,0.2);">${t.status}</div>
-                        </div>`;
-                    }).join('')}</div>
-                `;
+                el.innerHTML = `<div class="stats-grid">
+                    <div class="stat-card"><div class="stat-icon" style="background:rgba(16,185,129,0.15);color:#10b981;">✓</div><div><div class="stat-value">${fmt(earned)}</div><div class="stat-label">Earned</div></div></div>
+                    <div class="stat-card"><div class="stat-icon" style="background:rgba(245,158,11,0.15);color:#f59e0b;">⏳</div><div><div class="stat-value">${fmt(pending)}</div><div class="stat-label">Pending</div></div></div>
+                    <div class="stat-card"><div class="stat-icon" style="background:rgba(99,102,241,0.15);color:var(--accent);">🎬</div><div><div class="stat-value">${completedVids}</div><div class="stat-label">Videos Done</div></div></div>
+                    <div class="stat-card"><div class="stat-icon" style="background:rgba(239,68,68,0.15);color:#ef4444;">📋</div><div><div class="stat-value">${pendingVids}</div><div class="stat-label">Videos Pending</div></div></div>
+                </div>`;
             };
-    
-            ViewRenderer.renderCollabKanban = function(el, data, ws, isManager) {
+
+            ViewRenderer.renderCollabKanban = function(el, ws, isManager) {
+                const data = ws.data;
                 const tasks = (data.notes||[]).filter(n=>!n.archived).sort((a,b)=>(a.order||0)-(b.order||0));
                 const clients = data.clients||[];
                 const cols = ['Pending','In Progress','Revision','Completed'];
+                const sid = ws.shareId;
                 el.innerHTML = `
-                    ${isManager ? `<div style="margin-bottom:12px;display:flex;justify-content:flex-end;">
-                        <button class="btn btn-primary" onclick="ViewRenderer.addCollabTask('${ws.shareId}')">+ Add Task</button>
+                    ${isManager ? `<div style="margin-bottom:12px;display:flex;gap:8px;justify-content:flex-end;">
+                        <button class="btn btn-primary" onclick="ViewRenderer.addCollabTask('${sid}')">+ Add Task</button>
                     </div>` : ''}
-                    <div class="kanban-board" style="height:calc(100vh - 320px);">
+                    <div class="kanban-board" style="height:calc(100vh - 340px);">
                         ${cols.map(col => `
                             <div class="kanban-col" data-status="${col}">
                                 <div class="kanban-col-header">${col} <span style="color:var(--text-secondary);">${tasks.filter(t=>t.status===col).length}</span></div>
                                 <div class="kanban-cards">
                                     ${tasks.filter(t=>t.status===col).map(t=>{
                                         const cl=clients.find(c=>c.id===t.clientId);
+                                        const currency=(data.settings||{}).currency||'USD';
+                                        const price=t.pricingType==='per_video'?(t.videos||0)*(t.price||0):(t.price||0);
+                                        const priceStr=currency==='INR'?`₹${price}`:`${price}`;
                                         return `<div class="kanban-card ${t.status==='Completed'?'completed':''}" style="${cl?'border-left:4px solid '+cl.color+';':''}">
                                             <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:6px;">
-                                                <h4 style="font-size:0.95rem;">${Utils.escapeHtml(t.title)||'Untitled'}</h4>
-                                                ${isManager ? `<button class="icon-btn" style="padding:2px;" onclick="ViewRenderer.editCollabTask('${ws.shareId}','${t.id}')"><svg class="icon" style="width:14px;height:14px;"><use href="#i-bold"></use></svg></button>` : ''}
+                                                <h4 style="font-size:0.95rem;flex:1;">${Utils.escapeHtml(t.title)||'Untitled'}</h4>
+                                                ${isManager ? `<button class="icon-btn" style="padding:2px;flex-shrink:0;" title="Edit" onclick="ViewRenderer.editCollabTask('${sid}','${t.id}')"><svg class="icon" style="width:14px;height:14px;"><use href="#i-edit"></use></svg></button>` : ''}
                                             </div>
-                                            <div style="font-size:0.8rem;color:var(--text-secondary);">${cl?cl.name:'No client'}</div>
-                                            <div style="font-size:0.78rem;color:var(--text-secondary);margin-top:4px;display:flex;gap:8px;">
+                                            <div style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:4px;">${cl?cl.name:'No client'}</div>
+                                            <div style="font-size:0.78rem;color:var(--text-secondary);display:flex;gap:8px;margin-bottom:${isManager?'8px':'0'};">
                                                 <span><svg style="width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:2;vertical-align:middle;" viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg> ${t.videos||0}</span>
+                                                <span style="color:var(--accent);">${priceStr}</span>
                                                 <span>Recv: ${Utils.formatDate(t.receivedDate)}</span>
                                             </div>
+                                            ${isManager ? `<div style="display:flex;gap:4px;flex-wrap:wrap;">
+                                                ${cols.filter(s=>s!==col).map(s=>`<button style="font-size:0.68rem;padding:2px 6px;border-radius:4px;border:1px solid var(--border);background:var(--bg-tertiary);color:var(--text-secondary);cursor:pointer;" onclick="ViewRenderer._collabSetStatus('${sid}','${t.id}','${s}')">${s}</button>`).join('')}
+                                            </div>` : ''}
                                         </div>`;
                                     }).join('')}
                                 </div>
@@ -2393,8 +2391,23 @@ ${body}
                     </div>
                 `;
             };
-    
-            ViewRenderer.renderCollabDatabase = function(el, data) {
+
+            ViewRenderer._collabSetStatus = function(shareId, taskId, newStatus) {
+                const ws = App.state.sharedWorkspaces.find(w=>w.shareId===shareId);
+                if (!ws || ws.role!=='manager') return;
+                const task = (ws.data.notes||[]).find(n=>n.id===taskId);
+                if (!task) return;
+                task.status = newStatus;
+                if (newStatus === 'Completed') task.completedDate = Date.now();
+                else task.completedDate = null;
+                App.saveState();
+                App._broadcastCollab(shareId);
+                App.render();
+            };
+
+            ViewRenderer.renderCollabDatabase = function(el, ws, isManager) {
+                const data = ws.data;
+                const sid = ws.shareId;
                 const tasks = (data.notes||[]).filter(n=>!n.archived);
                 const clients = data.clients||[];
                 const currency = (data.settings||{}).currency||'USD';
@@ -2407,69 +2420,257 @@ ${body}
                         completedRev = months.size*(c.monthlySalary||0);
                     } else {
                         completedRev = cTasks.filter(t=>t.status==='Completed').reduce((s,t)=>s+(t.pricingType==='per_video'?(t.videos||0)*(t.price||0):(t.price||0)),0);
-                        pendingRev = cTasks.filter(t=>t.status!=='Completed').reduce((s,t)=>s+(t.pricingType==='per_video'?(t.videos||0)*(t.price||0):(t.price||0)),0);
+                        pendingRev   = cTasks.filter(t=>t.status!=='Completed').reduce((s,t)=>s+(t.pricingType==='per_video'?(t.videos||0)*(t.price||0):(t.price||0)),0);
                     }
                     return {...c, totalVids: cTasks.reduce((s,t)=>s+(t.videos||0),0), completedRev, pendingRev};
-                }).filter(c=>c.totalVids>0||c.completedRev>0||c.pendingRev>0);
-                el.innerHTML = rows.length ? `<table class="db-table">
-                    <thead><tr><th>Client</th><th>Type</th><th>Videos</th><th>Pending</th><th>Earned</th><th>Total</th></tr></thead>
-                    <tbody>${rows.map(c=>`<tr>
-                        <td style="color:${c.color};font-weight:bold;">${Utils.escapeHtml(c.name)}</td>
-                        <td>${c.paymentType==='monthly'?'Monthly':'Per Video'}</td>
-                        <td>${c.totalVids}</td>
-                        <td style="color:#f59e0b;">${fmt(c.pendingRev)}</td>
-                        <td style="color:#10b981;">${fmt(c.completedRev)}</td>
-                        <td><strong>${fmt(c.completedRev+c.pendingRev)}</strong></td>
-                    </tr>`).join('')}</tbody>
-                </table>` : '<p style="color:var(--text-secondary);">No client data yet.</p>';
+                });
+                el.innerHTML = `
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+                        ${isManager ? `<button class="btn btn-primary" onclick="ViewRenderer.addCollabClient('${sid}')">+ Add Client</button>` : '<div></div>'}
+                        <button class="btn" onclick="ViewRenderer.exportCollabDatabasePDF('${sid}')"><svg class="icon" style="width:14px;height:14px;"><use href="#i-download"></use></svg> Export PDF</button>
+                    </div>
+                    ${rows.length ? `<div style="overflow-x:auto;"><table class="db-table" id="collabDbTable">
+                        <thead><tr><th>Client</th><th>Type</th>${isManager?'<th>Salary/Price</th>':''}
+                            <th>Videos</th><th>Pending</th><th>Earned</th><th>Total</th>${isManager?'<th></th>':''}</tr></thead>
+                        <tbody>${rows.map(c=>`<tr>
+                            <td style="color:${c.color};font-weight:bold;">${Utils.escapeHtml(c.name)}</td>
+                            <td>${c.paymentType==='monthly'?'Monthly':'Per Video'}</td>
+                            ${isManager?`<td>${c.paymentType==='monthly'?fmt(c.monthlySalary||0)+'/mo':fmt(c.price||0)}</td>`:''}
+                            <td>${c.totalVids}</td>
+                            <td style="color:#f59e0b;">${fmt(c.pendingRev)}</td>
+                            <td style="color:#10b981;">${fmt(c.completedRev)}</td>
+                            <td><strong>${fmt(c.completedRev+c.pendingRev)}</strong></td>
+                            ${isManager?`<td style="white-space:nowrap;">
+                                <button class="icon-btn" title="Edit" onclick="ViewRenderer.editCollabClient('${sid}','${c.id}')"><svg class="icon" style="width:14px;height:14px;"><use href="#i-edit"></use></svg></button>
+                                <button class="icon-btn" title="Delete" style="color:#ef4444;" onclick="ViewRenderer.deleteCollabClient('${sid}','${c.id}')"><svg class="icon" style="width:14px;height:14px;"><use href="#i-close"></use></svg></button>
+                            </td>`:''}
+                        </tr>`).join('')}</tbody>
+                    </table></div>` : `<p style="color:var(--text-secondary);">No clients yet.${isManager?' Click + Add Client to get started.':''}</p>`}
+                `;
             };
-    
+
+            ViewRenderer.exportCollabDatabasePDF = function(shareId) {
+                const ws = App.state.sharedWorkspaces.find(w=>w.shareId===shareId);
+                if (!ws) return;
+                const data = ws.data;
+                const tasks = (data.notes||[]).filter(n=>!n.archived);
+                const clients = data.clients||[];
+                const currency = (data.settings||{}).currency||'USD';
+                const fmt = v => currency==='INR' ? `₹${v}` : `${v}`;
+                const rows = clients.map(c => {
+                    const cTasks = tasks.filter(t=>t.clientId===c.id);
+                    let completedRev=0, pendingRev=0;
+                    if (c.paymentType==='monthly') {
+                        const months=new Set(cTasks.filter(t=>t.status==='Completed').map(t=>{const d=new Date(t.completedDate||Date.now());return d.getMonth()+'_'+d.getFullYear();}));
+                        completedRev=months.size*(c.monthlySalary||0);
+                    } else {
+                        completedRev=cTasks.filter(t=>t.status==='Completed').reduce((s,t)=>s+(t.pricingType==='per_video'?(t.videos||0)*(t.price||0):(t.price||0)),0);
+                        pendingRev=cTasks.filter(t=>t.status!=='Completed').reduce((s,t)=>s+(t.pricingType==='per_video'?(t.videos||0)*(t.price||0):(t.price||0)),0);
+                    }
+                    return {...c, totalVids:cTasks.reduce((s,t)=>s+(t.videos||0),0), completedRev, pendingRev};
+                });
+                const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Client Database – ${Utils.escapeHtml(ws.sharedBy)}</title>
+                <style>body{font-family:system-ui,sans-serif;padding:32px;color:#111;}h1{font-size:1.3rem;margin-bottom:4px;}p{font-size:0.85rem;color:#666;margin-bottom:20px;}
+                table{width:100%;border-collapse:collapse;font-size:0.9rem;}th{background:#f3f4f6;padding:10px 12px;text-align:left;border-bottom:2px solid #e5e7eb;}
+                td{padding:8px 12px;border-bottom:1px solid #e5e7eb;}tr:last-child td{border-bottom:none;}
+                .earn{color:#059669;}.pend{color:#d97706;}.bold{font-weight:700;}
+                @media print{@page{margin:20mm;}}</style></head><body>
+                <h1>Client Database</h1>
+                <p>Workspace shared by: <strong>${Utils.escapeHtml(ws.sharedBy)}</strong> &nbsp;·&nbsp; Exported: ${new Date().toLocaleDateString()}</p>
+                <table><thead><tr><th>Client</th><th>Type</th><th>Videos</th><th>Pending</th><th>Earned</th><th>Total</th></tr></thead>
+                <tbody>${rows.map(r=>`<tr>
+                    <td class="bold">${Utils.escapeHtml(r.name)}</td>
+                    <td>${r.paymentType==='monthly'?'Monthly':'Per Video'}</td>
+                    <td>${r.totalVids}</td>
+                    <td class="pend">${fmt(r.pendingRev)}</td>
+                    <td class="earn">${fmt(r.completedRev)}</td>
+                    <td class="bold">${fmt(r.completedRev+r.pendingRev)}</td>
+                </tr>`).join('')}</tbody></table>
+                <script>window.onload=()=>{window.print();}<\/script></body></html>`;
+                const w = window.open('','_blank');
+                if (w) { w.document.write(html); w.document.close(); }
+                else Utils.showToast('Allow pop-ups to export PDF.');
+            };
+
             ViewRenderer.addCollabTask = function(shareId) {
                 const ws = App.state.sharedWorkspaces.find(w=>w.shareId===shareId);
                 if (!ws || ws.role!=='manager') return;
                 if (!ws.data.notes) ws.data.notes=[];
-                ws.data.notes.unshift({id:Utils.uid(),type:'kanban',title:'New Task',status:'Pending',videos:1,price:0,pricingType:'total',clientId:'',receivedDate:Date.now(),completedDate:null,order:Date.now(),archived:false});
-                App.saveState(); App.render();
+                const newTask = {id:Utils.uid(),type:'kanban',title:'New Task',status:'Pending',videos:1,price:0,pricingType:'total',clientId:'',receivedDate:Date.now(),completedDate:null,order:Date.now(),archived:false};
+                ws.data.notes.unshift(newTask);
+                App.saveState();
+                App._broadcastCollab(shareId);
+                ViewRenderer.editCollabTask(shareId, newTask.id);
             };
-    
+
             ViewRenderer.editCollabTask = function(shareId, taskId) {
                 const ws = App.state.sharedWorkspaces.find(w=>w.shareId===shareId);
                 if (!ws) return;
                 const task = (ws.data.notes||[]).find(n=>n.id===taskId);
                 if (!task) return;
+                const clients = ws.data.clients||[];
+                const clientOptions = clients.map(c=>`<option value="${c.id}" ${task.clientId===c.id?'selected':''}>${Utils.escapeHtml(c.name)}</option>`).join('');
                 App.openCustomModal(`
                     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
                         <h3>Edit Task</h3>
                         <button class="icon-btn" onclick="App.closeModal()"><svg class="icon"><use href="#i-close"></use></svg></button>
                     </div>
-                    <div style="display:flex;flex-direction:column;gap:10px;">
-                        <input class="input-modern" placeholder="Task title" value="${Utils.escapeHtml(task.title)}" oninput="ViewRenderer._collabEditTask('${shareId}','${taskId}','title',this.value)">
-                        <select class="input-modern" onchange="ViewRenderer._collabEditTask('${shareId}','${taskId}','status',this.value)">
-                            ${['Pending','In Progress','Revision','Completed'].map(s=>`<option ${task.status===s?'selected':''} value="${s}">${s}</option>`).join('')}
-                        </select>
-                        <input type="number" class="input-modern" placeholder="Videos" value="${task.videos||0}" oninput="ViewRenderer._collabEditTask('${shareId}','${taskId}','videos',parseInt(this.value)||0)">
+                    <div style="display:flex;flex-direction:column;gap:10px;max-height:60vh;overflow-y:auto;">
+                        <div>
+                            <label style="font-size:0.82rem;color:var(--text-secondary);display:block;margin-bottom:4px;">Title</label>
+                            <input class="input-modern" placeholder="Task title" value="${Utils.escapeHtml(task.title)}" oninput="ViewRenderer._collabEditTask('${shareId}','${taskId}','title',this.value)">
+                        </div>
+                        <div>
+                            <label style="font-size:0.82rem;color:var(--text-secondary);display:block;margin-bottom:4px;">Status</label>
+                            <select class="input-modern" onchange="ViewRenderer._collabSetStatus('${shareId}','${taskId}',this.value);this.closest('.modal-content')&&App.closeModal();App.openCustomModal&&ViewRenderer.editCollabTask('${shareId}','${taskId}')">
+                                ${['Pending','In Progress','Revision','Completed'].map(s=>`<option ${task.status===s?'selected':''} value="${s}">${s}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size:0.82rem;color:var(--text-secondary);display:block;margin-bottom:4px;">Client</label>
+                            <select class="input-modern" onchange="ViewRenderer._collabEditTask('${shareId}','${taskId}','clientId',this.value)">
+                                <option value="">— No client —</option>
+                                ${clientOptions}
+                            </select>
+                        </div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                            <div>
+                                <label style="font-size:0.82rem;color:var(--text-secondary);display:block;margin-bottom:4px;">Videos</label>
+                                <input type="number" class="input-modern" min="0" value="${task.videos||0}" oninput="ViewRenderer._collabEditTask('${shareId}','${taskId}','videos',parseInt(this.value)||0)">
+                            </div>
+                            <div>
+                                <label style="font-size:0.82rem;color:var(--text-secondary);display:block;margin-bottom:4px;">Pricing</label>
+                                <select class="input-modern" onchange="ViewRenderer._collabEditTask('${shareId}','${taskId}','pricingType',this.value)">
+                                    <option value="total" ${task.pricingType!=='per_video'?'selected':''}>Total price</option>
+                                    <option value="per_video" ${task.pricingType==='per_video'?'selected':''}>Per video</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div>
+                            <label style="font-size:0.82rem;color:var(--text-secondary);display:block;margin-bottom:4px;">Price (${(ws.data.settings||{}).currency||'USD'})</label>
+                            <input type="number" class="input-modern" min="0" value="${task.price||0}" oninput="ViewRenderer._collabEditTask('${shareId}','${taskId}','price',parseFloat(this.value)||0)">
+                        </div>
+                        <div>
+                            <label style="font-size:0.82rem;color:var(--text-secondary);display:block;margin-bottom:4px;">Received date</label>
+                            <input type="date" class="input-modern" value="${task.receivedDate?new Date(task.receivedDate).toISOString().slice(0,10):''}" onchange="ViewRenderer._collabEditTask('${shareId}','${taskId}','receivedDate',new Date(this.value).getTime())">
+                        </div>
                     </div>
                     <div style="margin-top:16px;display:flex;gap:10px;">
-                        <button class="btn" style="flex:1;" onclick="App.closeModal()">Cancel</button>
-                        <button class="btn btn-primary" style="flex:1;" onclick="App.saveState();App.closeModal();">Save</button>
+                        <button class="btn" style="flex:1;color:#ef4444;border-color:rgba(239,68,68,0.4);" onclick="ViewRenderer._collabDeleteTask('${shareId}','${taskId}')">Delete</button>
+                        <button class="btn btn-primary" style="flex:1;" onclick="App.saveState();App._broadcastCollab('${shareId}');App.closeModal();App.render();">Save</button>
                     </div>
                 `);
             };
-    
+
             ViewRenderer._collabEditTask = function(shareId, taskId, key, value) {
                 const ws = App.state.sharedWorkspaces.find(w=>w.shareId===shareId);
                 if (!ws) return;
                 const task = (ws.data.notes||[]).find(n=>n.id===taskId);
-                if (task) { task[key]=value; App.saveState(); }
+                if (task) { task[key]=value; App.saveState(); App._broadcastCollab(shareId); }
             };
-    
+
+            ViewRenderer._collabDeleteTask = function(shareId, taskId) {
+                if (!confirm('Delete this task?')) return;
+                const ws = App.state.sharedWorkspaces.find(w=>w.shareId===shareId);
+                if (!ws) return;
+                ws.data.notes = (ws.data.notes||[]).filter(n=>n.id!==taskId);
+                App.saveState(); App._broadcastCollab(shareId); App.closeModal(); App.render();
+            };
+
+            ViewRenderer.addCollabClient = function(shareId) {
+                const ws = App.state.sharedWorkspaces.find(w=>w.shareId===shareId);
+                if (!ws || ws.role!=='manager') return;
+                if (!ws.data.clients) ws.data.clients=[];
+                const newClient = {id:Utils.uid(),name:'New Client',color:'#6366f1',paymentType:'total',price:0,monthlySalary:0};
+                ws.data.clients.push(newClient);
+                App.saveState(); App._broadcastCollab(shareId);
+                ViewRenderer.editCollabClient(shareId, newClient.id);
+            };
+
+            ViewRenderer.editCollabClient = function(shareId, clientId) {
+                const ws = App.state.sharedWorkspaces.find(w=>w.shareId===shareId);
+                if (!ws) return;
+                const client = (ws.data.clients||[]).find(c=>c.id===clientId);
+                if (!client) return;
+                const currency = (ws.data.settings||{}).currency||'USD';
+                App.openCustomModal(`
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+                        <h3>Edit Client</h3>
+                        <button class="icon-btn" onclick="App.closeModal()"><svg class="icon"><use href="#i-close"></use></svg></button>
+                    </div>
+                    <div style="display:flex;flex-direction:column;gap:10px;">
+                        <div>
+                            <label style="font-size:0.82rem;color:var(--text-secondary);display:block;margin-bottom:4px;">Client name</label>
+                            <input class="input-modern" value="${Utils.escapeHtml(client.name)}" oninput="ViewRenderer._collabEditClient('${shareId}','${clientId}','name',this.value)">
+                        </div>
+                        <div>
+                            <label style="font-size:0.82rem;color:var(--text-secondary);display:block;margin-bottom:4px;">Color</label>
+                            <input type="color" value="${client.color||'#6366f1'}" style="width:100%;height:36px;border-radius:8px;border:1px solid var(--border);cursor:pointer;background:none;" onchange="ViewRenderer._collabEditClient('${shareId}','${clientId}','color',this.value)">
+                        </div>
+                        <div>
+                            <label style="font-size:0.82rem;color:var(--text-secondary);display:block;margin-bottom:4px;">Payment type</label>
+                            <select class="input-modern" onchange="ViewRenderer._collabEditClient('${shareId}','${clientId}','paymentType',this.value);App.closeModal();ViewRenderer.editCollabClient('${shareId}','${clientId}')">
+                                <option value="total" ${client.paymentType!=='monthly'?'selected':''}>Per video / total</option>
+                                <option value="monthly" ${client.paymentType==='monthly'?'selected':''}>Monthly salary</option>
+                            </select>
+                        </div>
+                        ${client.paymentType==='monthly' ? `
+                        <div>
+                            <label style="font-size:0.82rem;color:var(--text-secondary);display:block;margin-bottom:4px;">Monthly salary (${currency})</label>
+                            <input type="number" class="input-modern" min="0" value="${client.monthlySalary||0}" oninput="ViewRenderer._collabEditClient('${shareId}','${clientId}','monthlySalary',parseFloat(this.value)||0)">
+                        </div>` : `
+                        <div>
+                            <label style="font-size:0.82rem;color:var(--text-secondary);display:block;margin-bottom:4px;">Default price (${currency})</label>
+                            <input type="number" class="input-modern" min="0" value="${client.price||0}" oninput="ViewRenderer._collabEditClient('${shareId}','${clientId}','price',parseFloat(this.value)||0)">
+                        </div>`}
+                    </div>
+                    <div style="margin-top:16px;display:flex;gap:10px;">
+                        <button class="btn" style="flex:1;" onclick="App.closeModal()">Cancel</button>
+                        <button class="btn btn-primary" style="flex:1;" onclick="App.saveState();App._broadcastCollab('${shareId}');App.closeModal();App.render();">Save</button>
+                    </div>
+                `);
+            };
+
+            ViewRenderer._collabEditClient = function(shareId, clientId, key, value) {
+                const ws = App.state.sharedWorkspaces.find(w=>w.shareId===shareId);
+                if (!ws) return;
+                const client = (ws.data.clients||[]).find(c=>c.id===clientId);
+                if (client) { client[key]=value; App.saveState(); App._broadcastCollab(shareId); }
+            };
+
+            ViewRenderer.deleteCollabClient = function(shareId, clientId) {
+                if (!confirm('Delete this client? Tasks linked to them will become unassigned.')) return;
+                const ws = App.state.sharedWorkspaces.find(w=>w.shareId===shareId);
+                if (!ws) return;
+                ws.data.clients = (ws.data.clients||[]).filter(c=>c.id!==clientId);
+                App.saveState(); App._broadcastCollab(shareId); App.render();
+            };
+
             ViewRenderer.exportCollabUpdates = function(shareId) {
                 const ws = App.state.sharedWorkspaces.find(w=>w.shareId===shareId);
                 if (!ws) return;
                 Utils.downloadFile('collab_updates_'+ws.sharedBy.replace(/\s+/g,'_')+'.json', JSON.stringify({shareId:ws.shareId,sharedBy:ws.sharedBy,role:ws.role,updatedAt:Date.now(),data:ws.data},null,2), 'application/json');
             };
-    
-    
+
+
+            // Cross-tab collab sync via BroadcastChannel
+            App._collabChannel = (typeof BroadcastChannel !== 'undefined') ? new BroadcastChannel('nexus-collab-sync') : null;
+            if (App._collabChannel) {
+                App._collabChannel.onmessage = (e) => {
+                    if (e.data.type !== 'collab-update') return;
+                    const idx = (App.state.sharedWorkspaces||[]).findIndex(w => w.shareId === e.data.shareId);
+                    if (idx < 0) return;
+                    App.state.sharedWorkspaces[idx].data = e.data.data;
+                    App.saveState();
+                    if (App.activeCollab === e.data.shareId) App.render();
+                    else Utils.showToast('Collab workspace updated by manager.');
+                };
+            }
+            App._broadcastCollab = function(shareId) {
+                if (!App._collabChannel) return;
+                const ws = (App.state.sharedWorkspaces||[]).find(w => w.shareId === shareId);
+                if (ws) App._collabChannel.postMessage({ type: 'collab-update', shareId, data: ws.data });
+            };
             App.init();
         </script>
     </body>
