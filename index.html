@@ -667,11 +667,18 @@
                         scope: this.SCOPES,
                         callback: (resp) => {
                             if (resp.error) {
-                                const msg = resp.error_description || resp.error;
-                                Utils.showToast('Google sign-in failed: ' + msg);
-                                console.error('GIS error:', resp);
+                                // 'access_denied' during silent refresh = user revoked; just show button
+                                if (resp.error !== 'access_denied') {
+                                    Utils.showToast('Google sign-in failed: ' + (resp.error_description || resp.error));
+                                }
+                                console.warn('GIS:', resp.error);
+                                App.updateAuthUI('ready');
                                 return;
                             }
+                            // Persist token so we can restore it after a refresh
+                            const expiresAt = Date.now() + ((resp.expires_in || 3600) - 60) * 1000;
+                            localStorage.setItem('nexus_gdrive_token', JSON.stringify({ access_token: resp.access_token, expires_at: expiresAt }));
+                            gapi.client.setToken({ access_token: resp.access_token });
                             this.isSignedIn = true;
                             App.updateAuthUI('signedin');
                             this.sync();
@@ -682,7 +689,21 @@
                 },
                 
                 tryInitAuth() {
-                    if (this.gapiInited && this.gisInited) {
+                    if (!this.gapiInited || !this.gisInited) return;
+                    const stored = (() => { try { return JSON.parse(localStorage.getItem('nexus_gdrive_token')); } catch(e) { return null; } })();
+                    if (stored && stored.access_token) {
+                        if (stored.expires_at > Date.now()) {
+                            // Token still valid — restore immediately, no popup
+                            gapi.client.setToken({ access_token: stored.access_token });
+                            this.isSignedIn = true;
+                            App.updateAuthUI('signedin');
+                            this.sync();
+                        } else {
+                            // Token expired — silent refresh (no popup if user already granted)
+                            App.updateAuthUI('ready');
+                            this.tokenClient.requestAccessToken({ prompt: '' });
+                        }
+                    } else {
                         App.updateAuthUI('ready');
                     }
                 },
@@ -775,8 +796,10 @@ ${body}
                 },
                 
                 signOut() {
-                    google.accounts.oauth2.revoke(gapi.client.getToken()?.access_token, () => {});
+                    const token = gapi.client.getToken();
+                    if (token?.access_token) google.accounts.oauth2.revoke(token.access_token, () => {});
                     gapi.client.setToken(null);
+                    localStorage.removeItem('nexus_gdrive_token');
                     this.isSignedIn = false;
                     App.setSyncStatus('offline');
                     App.updateAuthUI('ready');
