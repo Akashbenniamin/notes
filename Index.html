@@ -1,0 +1,1964 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="saas" data-mode="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nexus Workspace</title>
+    <!-- Google API Scripts for Drive Sync -->
+    <script src="https://apis.google.com/js/api.js"></script>
+    <script src="https://accounts.google.com/gsi/client"></script>
+    <style>
+        :root {
+            --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            --font-heading: "Georgia", "Times New Roman", serif;
+            --radius: 12px;
+            --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            --shadow: 0 1px 2px rgba(0,0,0,0.04), 0 2px 6px rgba(0,0,0,0.04);
+            --shadow-hover: 0 4px 12px rgba(0,0,0,0.1);
+            --modal-shadow: 0 20px 50px rgba(0,0,0,0.3);
+            
+            /* Light Mode Note Colors */
+            --note-c-default: #ffffff;
+            --note-c-yellow: #fff9c4;
+            --note-c-blue: #bbdefb;
+            --note-c-pink: #fce4ec;
+            --note-c-green: #c8e6c9;
+            --note-c-orange: #ffe0b2;
+        }
+
+        [data-mode="dark"] {
+            /* Dark Mode Note Colors */
+            --note-c-default: #2a2b2e;
+            --note-c-yellow: #5c4d1e;
+            --note-c-blue: #1e3a5f;
+            --note-c-pink: #4e2a3a;
+            --note-c-green: #1f4d2e;
+            --note-c-orange: #5c3a1e;
+        }
+
+        /* Modern Scrollbars */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(128, 128, 128, 0.4); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(128, 128, 128, 0.6); }
+        html { scrollbar-width: thin; scrollbar-color: rgba(128, 128, 128, 0.4) transparent; }
+
+        /* Theme: SaaS Dashboard (Glassmorphism) */
+        [data-theme="saas"] {
+            --bg: #f0f2f5;
+            --bg-secondary: rgba(255, 255, 255, 0.6);
+            --bg-tertiary: rgba(255, 255, 255, 0.9);
+            --text: #1d1d1f;
+            --text-secondary: #6e6e73;
+            --border: rgba(0, 0, 0, 0.05);
+            --accent: #6366f1;
+            --accent-hover: #4f46e5;
+            --glass: rgba(255, 255, 255, 0.6);
+            --radius: 16px;
+        }
+        [data-theme="saas"][data-mode="dark"] {
+            --bg: #0f172a;
+            --bg-secondary: rgba(30, 41, 59, 0.6);
+            --bg-tertiary: rgba(30, 41, 59, 0.9);
+            --text: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --border: rgba(255,255,255,0.1);
+            --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 2px 6px rgba(0,0,0,0.2);
+            --glass: rgba(30, 41, 59, 0.6);
+            --modal-shadow: 0 20px 50px rgba(0,0,0,0.8);
+        }
+
+        /* Theme: Clean Modern */
+        [data-theme="clean"] {
+            --bg: #ffffff;
+            --bg-secondary: #f7f7f5;
+            --bg-tertiary: #efeee9;
+            --text: #37352f;
+            --text-secondary: #6b6a63;
+            --border: #e9e9e4;
+            --accent: #0070f3;
+            --accent-hover: #0060d0;
+            --radius: 8px;
+        }
+        [data-theme="clean"][data-mode="dark"] {
+            --bg: #191919;
+            --bg-secondary: #202020;
+            --bg-tertiary: #2a2a2a;
+            --text: #e6e6e6;
+            --text-secondary: #999999;
+            --border: #333333;
+        }
+
+        /* Theme: Google Keep Style */
+        [data-theme="keep"] {
+            --font-body: "Roboto", system-ui, sans-serif;
+            --font-heading: "Product Sans", system-ui, sans-serif;
+            --bg: #fefefe;
+            --bg-secondary: #f1f3f4;
+            --bg-tertiary: #ffffff;
+            --text: #202124;
+            --text-secondary: #5f6368;
+            --border: #e0e0e0;
+            --accent: #1a73e8;
+            --accent-hover: #1765cc;
+            --radius: 8px;
+        }
+        [data-theme="keep"][data-mode="dark"] {
+            --bg: #202124;
+            --bg-secondary: #28292c;
+            --bg-tertiary: #2a2b2e;
+            --text: #e8eaed;
+            --text-secondary: #9aa0a6;
+            --border: #3c4043;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { height: 100%; overflow: hidden; }
+        body {
+            font-family: var(--font-body);
+            background: var(--bg);
+            color: var(--text);
+            transition: background var(--transition), color var(--transition);
+            font-size: 15px;
+            line-height: 1.5;
+        }
+
+        .app-container {
+            display: grid;
+            grid-template-columns: 260px 1fr;
+            grid-template-rows: 60px 1fr;
+            grid-template-areas: "header header" "sidebar main";
+            height: 100vh;
+            transition: filter var(--transition);
+        }
+        .app-container.blurred .main-content { filter: blur(8px) brightness(0.7); pointer-events: none; }
+
+        header {
+            grid-area: header;
+            background: var(--glass);
+            backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; padding: 0 20px; gap: 16px; z-index: 100;
+        }
+        .logo { font-weight: 700; font-size: 1.2rem; color: var(--accent); }
+        .search-bar {
+            flex: 1; max-width: 600px; background: var(--bg-secondary);
+            border: 1px solid var(--border); border-radius: 20px; padding: 8px 16px;
+            display: flex; align-items: center; gap: 10px;
+        }
+        .search-bar input { background: none; border: none; color: var(--text); width: 100%; outline: none; font-size: 1rem; }
+        .header-actions { display: flex; gap: 10px; align-items: center; margin-left: auto; }
+
+        aside {
+            grid-area: sidebar; background: var(--bg-secondary); border-right: 1px solid var(--border);
+            padding: 20px 12px; overflow-y: auto; transition: transform var(--transition); z-index: 90;
+        }
+        .nav-item {
+            display: flex; align-items: center; gap: 12px; padding: 10px 12px;
+            border-radius: var(--radius); cursor: pointer; color: var(--text-secondary);
+            transition: all var(--transition); font-weight: 500; margin-bottom: 4px;
+        }
+        .nav-item:hover { background: var(--bg-tertiary); color: var(--text); }
+        .nav-item.active { background: var(--accent); color: white; }
+        .nav-section { margin-top: 20px; text-transform: uppercase; font-size: 0.75rem; color: var(--text-secondary); padding: 0 12px 8px; }
+
+        main { grid-area: main; overflow-y: auto; padding: 24px; position: relative; }
+        .view-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
+        h1 { font-family: var(--font-heading); font-size: 1.8rem; }
+        h2 { font-size: 1.2rem; margin-bottom: 16px; }
+
+        .btn {
+            background: var(--bg-tertiary); color: var(--text); border: 1px solid var(--border);
+            padding: 8px 16px; border-radius: var(--radius); cursor: pointer; font-weight: 500;
+            display: inline-flex; align-items: center; gap: 6px; transition: all var(--transition); font-size: 0.9rem; white-space: nowrap;
+        }
+        .btn:hover { border-color: var(--accent); color: var(--accent); }
+        .btn-primary { background: var(--accent); color: white; border: none; }
+        .btn-primary:hover { background: var(--accent-hover); color: white; }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        .icon-btn { background: none; border: none; padding: 8px; border-radius: 50%; cursor: pointer; color: var(--text-secondary); display: flex; transition: all var(--transition); }
+        .icon-btn:hover { background: rgba(0,0,0,0.05); color: var(--text); }
+
+        /* Modern Inputs */
+        .input-modern {
+            background: var(--bg); border: 1px solid var(--border); padding: 8px 12px;
+            border-radius: 8px; color: var(--text); font-size: 0.9rem; width: 100%; outline: none;
+            transition: border-color var(--transition); height: 38px;
+        }
+        .input-modern:focus { border-color: var(--accent); }
+        input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        input[type="number"] { -moz-appearance: textfield; }
+        
+        .input-group { position: relative; width: 100%; }
+        .input-icon {
+            position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+            color: var(--text-secondary); width: 16px; height: 16px; pointer-events: none; display: flex; align-items: center; font-weight: bold;
+        }
+        .input-with-icon { padding-left: 32px; }
+
+        /* Modern Checkboxes */
+        .nx-checkbox {
+            appearance: none; width: 18px; height: 18px; border: 2px solid var(--border); 
+            border-radius: 4px; cursor: pointer; position: relative; transition: all 0.2s; flex-shrink: 0; background: var(--bg);
+        }
+        .nx-checkbox:hover { border-color: var(--accent); }
+        .nx-checkbox:checked { background: var(--accent); border-color: var(--accent); }
+        .nx-checkbox:checked::after {
+            content: ''; position: absolute; left: 5px; top: 1px; width: 5px; height: 10px;
+            border: solid white; border-width: 0 2px 2px 0; transform: rotate(45deg);
+        }
+
+        /* Modern Toggle Switch */
+        .nx-switch { position: relative; display: inline-block; width: 44px; height: 24px; }
+        .nx-switch input { opacity: 0; width: 0; height: 0; }
+        .nx-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: var(--border); transition: .3s; border-radius: 24px; }
+        .nx-slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background: white; transition: .3s; border-radius: 50%; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+        .nx-switch input:checked + .nx-slider { background: var(--accent); }
+        .nx-switch input:checked + .nx-slider:before { transform: translateX(20px); }
+
+        /* Modern Settings UI */
+        .settings-container { max-width: 800px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; }
+        .settings-card { background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; box-shadow: var(--shadow); }
+        .settings-section-title { font-size: 1.1rem; font-weight: 600; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+        .settings-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; }
+        .settings-info { flex: 1; }
+        .settings-label { font-weight: 500; font-size: 1rem; }
+        .settings-desc { font-size: 0.85rem; color: var(--text-secondary); margin-top: 2px; }
+        .segmented-control { display: flex; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 2px; }
+        .seg-btn { background: transparent; border: none; padding: 6px 14px; cursor: pointer; border-radius: 6px; color: var(--text-secondary); font-weight: 500; font-size: 0.9rem; transition: all 0.2s; }
+        .seg-btn.active { background: var(--accent); color: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+
+        .notes-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; align-items: start; }
+        
+        .card {
+            background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: var(--radius);
+            padding: 16px; cursor: pointer;
+            transition: box-shadow var(--transition), transform var(--transition), border-color var(--transition);
+            box-shadow: var(--shadow); position: relative; display: flex; flex-direction: column; min-height: 100px;
+        }
+        .card:hover { box-shadow: var(--shadow-hover); transform: translateY(-2px); }
+        .card.dragging { opacity: 0.4; transform: rotate(2deg) scale(0.95); }
+        .card-overlay { position: absolute; top: 8px; right: 8px; display: flex; gap: 4px; opacity: 0; transition: opacity 0.2s; background: var(--glass); padding: 2px; border-radius: 20px; backdrop-filter: blur(4px); }
+        .card:hover .card-overlay { opacity: 1; }
+
+        /* Focus Modal */
+        .focus-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.4);
+            display: none; align-items: center; justify-content: center; z-index: 1000; backdrop-filter: blur(4px);
+            padding: 20px;
+        }
+        .focus-overlay.active { display: flex; }
+        .focus-card {
+            background: var(--bg-tertiary); border-radius: var(--radius); width: 100%; max-width: 600px;
+            max-height: 80vh; overflow-y: auto; padding: 24px; box-shadow: var(--modal-shadow);
+            display: flex; flex-direction: column; gap: 12px; animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            position: relative;
+        }
+        .focus-card.empty { max-width: 400px; }
+        @keyframes popIn { 0% { transform: scale(0.9); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+        
+        .editor-title { font-size: 1.3rem; font-weight: bold; border: none; background: none; color: var(--text); outline: none; width: 100%; font-family: var(--font-heading); }
+        .editor-content { min-height: 100px; outline: none; font-size: 1rem; line-height: 1.6; flex: 1; white-space: pre-wrap; }
+        .editor-toolbar { display: flex; gap: 5px; border-top: 1px solid var(--border); padding-top: 12px; justify-content: space-between; align-items: center; }
+        .toolbar-group { display: flex; gap: 5px; }
+        .color-palette-popup {
+            position: absolute; top: 60px; right: 20px; background: var(--bg-tertiary); padding: 8px; 
+            border-radius: var(--radius); box-shadow: var(--shadow-hover); display: none; grid-template-columns: repeat(4, 1fr); gap: 6px; z-index: 10; border: 1px solid var(--border);
+        }
+        .color-palette-popup.active { display: grid; }
+        .color-dot { width: 24px; height: 24px; border-radius: 50%; cursor: pointer; border: 1px solid var(--border); }
+
+        /* Checklist UI */
+        .checklist-item { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+        .checklist-text { flex: 1; background: transparent; border: none; color: var(--text); font-size: 1rem; outline: none; border-bottom: 1px solid transparent; transition: border-color 0.2s; }
+        .checklist-text:focus { border-bottom-color: var(--accent); }
+        .checklist-text.done { text-decoration: line-through; opacity: 0.6; }
+
+        /* Kanban Board */
+        .kanban-board { display: flex; gap: 16px; overflow-x: auto; height: calc(100vh - 140px); padding-bottom: 16px; }
+        .kanban-col { 
+            background: var(--bg-secondary); border-radius: var(--radius); 
+            flex: 1 1 0; min-width: 240px; display: flex; flex-direction: column; border: 1px solid var(--border); 
+        }
+        .kanban-col-header { padding: 12px 16px; font-weight: bold; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+        .kanban-cards { padding: 12px; flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; min-height: 50px; }
+        .kanban-card { background: var(--bg-tertiary); padding: 12px; border-radius: 8px; cursor: grab; box-shadow: var(--shadow); position: relative; border-left: 4px solid transparent; transition: all var(--transition); }
+        .kanban-card:hover { transform: translateY(-1px); box-shadow: var(--shadow-hover); }
+        .kanban-card.dragging { opacity: 0.5; }
+        .kanban-card.completed { opacity: 0.6; }
+        .kanban-card.completed h4 { text-decoration: line-through; }
+
+        /* Custom Dropdown */
+        .nx-dropdown { position: relative; display: inline-block; width: 100%; }
+        .nx-dropdown-trigger { background: var(--bg); border: 1px solid var(--border); padding: 8px 12px; border-radius: 8px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; width: 100%; color: var(--text); height: 38px; }
+        .nx-dropdown-trigger:hover { border-color: var(--accent); }
+        .nx-dropdown-menu { position: absolute; top: 100%; left: 0; right: 0; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 8px; box-shadow: var(--shadow-hover); z-index: 20; display: none; max-height: 200px; overflow-y: auto; margin-top: 4px; }
+        .nx-dropdown-menu.active { display: block; }
+        .nx-dropdown-item { padding: 8px 12px; cursor: pointer; font-size: 0.85rem; }
+        .nx-dropdown-item:hover { background: var(--bg-secondary); }
+
+        /* Custom Floating Calendar */
+        .nx-calendar { 
+            position: fixed; background: var(--bg-tertiary); border: 1px solid var(--border); 
+            border-radius: 8px; box-shadow: var(--modal-shadow); z-index: 3000; padding: 12px; width: 240px; 
+            display: none; 
+        }
+        .nx-calendar.active { display: block; }
+        .cal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; text-align: center; }
+        .cal-day { padding: 6px 0; font-size: 0.8rem; cursor: pointer; border-radius: 4px; }
+        .cal-day:hover { background: var(--accent); color: white; }
+        .cal-day.selected { background: var(--accent); color: white; font-weight: bold; }
+        .cal-day.faded { opacity: 0.3; }
+
+        /* DB Table */
+        .db-table { width: 100%; border-collapse: collapse; background: var(--bg-tertiary); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }
+        .db-table th, .db-table td { padding: 12px 16px; border-bottom: 1px solid var(--border); text-align: left; font-size: 0.9rem; }
+        .db-table th { background: var(--bg-secondary); font-weight: 600; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.5px; }
+        .db-table tr:hover { background: var(--bg-secondary); }
+        .db-filters { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; background: var(--bg-secondary); padding: 16px; border-radius: var(--radius); border: 1px solid var(--border); }
+        .db-filters .nx-dropdown { width: auto; min-width: 120px; }
+        .db-filter-group { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; color: var(--text-secondary); }
+        .db-date-btn { padding: 6px 10px; border: 1px solid var(--border); background: var(--bg); border-radius: 6px; cursor: pointer; color: var(--text); display: flex; align-items: center; gap: 4px; height: 38px; }
+
+        /* Brand Kit */
+        .brand-card { border: 1px solid var(--border); padding: 0; overflow: hidden; background: var(--bg-tertiary); }
+        .brand-preview { padding: 16px; background: var(--bg-secondary); border-bottom: 1px solid var(--border); }
+        .brand-colors-list { display: flex; flex-direction: column; gap: 8px; padding: 16px; }
+        .brand-color-row { display: flex; align-items: center; gap: 10px; }
+        .brand-color-swatch { width: 32px; height: 32px; border-radius: 6px; border: 1px solid var(--border); }
+        .brand-fonts { padding: 0 16px 16px; font-size: 0.85rem; color: var(--text-secondary); }
+
+        .icon { width: 20px; height: 20px; stroke: currentColor; stroke-width: 2; fill: none; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+
+        /* Sync Status */
+        .sync-dot { width: 10px; height: 10px; border-radius: 50%; background: #ccc; transition: all 0.3s; }
+        .sync-dot.online { background: #10b981; box-shadow: 0 0 8px #10b981; }
+        .sync-dot.syncing { background: #f59e0b; animation: pulse 1s infinite; }
+        .sync-dot.offline { background: #ef4444; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+
+        /* Toast & Logger */
+        .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 12px 24px; border-radius: var(--radius); z-index: 2000; opacity: 0; transition: opacity 0.3s, transform 0.3s; display: flex; align-items: center; gap: 12px; }
+        .toast.show { opacity: 1; transform: translateX(-50%) translateY(-10px); }
+        
+        .logger-panel {
+            position: fixed; bottom: 20px; right: 20px; width: 300px; max-height: 400px;
+            background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: var(--radius);
+            box-shadow: var(--modal-shadow); z-index: 1500; display: none; flex-direction: column;
+        }
+        .logger-panel.active { display: flex; }
+        .logger-header { padding: 12px 16px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+        .logger-content { padding: 12px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 8px; }
+        .log-item { font-size: 0.8rem; color: var(--text-secondary); padding: 4px 0; border-bottom: 1px solid var(--border); }
+        .log-item strong { color: var(--text); }
+
+        /* Mobile */
+        @media (max-width: 768px) {
+            .app-container { grid-template-columns: 1fr; grid-template-areas: "header" "main"; }
+            aside { position: fixed; left: 0; top: 60px; bottom: 0; width: 260px; transform: translateX(-100%); }
+            aside.open { transform: translateX(0); box-shadow: 2px 0 10px rgba(0,0,0,0.1); }
+        }
+
+        /* PDF Print Styles */
+        @media screen {
+            #printArea { display: none; }
+        }
+        @media print {
+            body * { visibility: hidden; }
+            #printArea, #printArea * { visibility: visible; }
+            #printArea { 
+                display: block !important; 
+                position: absolute; 
+                left: 0; top: 0; 
+                width: 100%; 
+                color: #000 !important; 
+                background: #fff !important; 
+                padding: 40px;
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            }
+            .pdf-header { margin-bottom: 30px; border-bottom: 2px solid #000; padding-bottom: 15px; }
+            .pdf-header h1 { font-size: 28px; margin: 0; color: #000 !important; }
+            .pdf-header p { font-size: 14px; color: #444 !important; margin: 5px 0 0; }
+            .pdf-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+            .pdf-table th { text-align: left; font-size: 12px; text-transform: uppercase; color: #444 !important; border-bottom: 1px solid #ddd; padding: 10px 8px; }
+            .pdf-table td { font-size: 14px; color: #000 !important; border-bottom: 1px solid #eee; padding: 12px 8px; }
+            .pdf-footer { margin-top: 50px; font-size: 12px; color: #666 !important; text-align: center; border-top: 1px solid #eee; padding-top: 15px; }
+            .pdf-total { margin-top: 20px; text-align: right; font-size: 16px; font-weight: bold; }
+        }
+    </style>
+</head>
+<body>
+    <svg style="display:none">
+        <symbol id="i-menu" viewBox="0 0 24 24"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></symbol>
+        <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></symbol>
+        <symbol id="i-plus" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></symbol>
+        <symbol id="i-sync" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></symbol>
+        <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></symbol>
+        <symbol id="i-db" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></symbol>
+        <symbol id="i-kanban" viewBox="0 0 24 24"><rect x="3" y="3" width="6" height="18" rx="1"></rect><rect x="11" y="3" width="6" height="10" rx="1"></rect><rect x="19" y="3" width="2" height="6" rx="1"></rect></symbol>
+        <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1-2-2 2 2 0 0 1 2-2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></symbol>
+        <symbol id="i-close" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></symbol>
+        <symbol id="i-pin" viewBox="0 0 24 24"><line x1="12" y1="17" x2="12" y2="22"></line><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V17z"></path></symbol>
+        <symbol id="i-check" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></symbol>
+        <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></symbol>
+        <symbol id="i-palette" viewBox="0 0 24 24"><circle cx="13.5" cy="6.5" r=".5"></circle><circle cx="17.5" cy="10.5" r=".5"></circle><circle cx="8.5" cy="7.5" r=".5"></circle><circle cx="6.5" cy="12.5" r=".5"></circle><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"></path></symbol>
+        <symbol id="i-archive" viewBox="0 0 24 24"><polyline points="21 8 21 21 3 21 3 8"></polyline><rect x="1" y="3" width="22" height="5"></rect><line x1="10" y1="12" x2="14" y2="12"></line></symbol>
+        <symbol id="i-bold" viewBox="0 0 24 24"><path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"></path><path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"></path></symbol>
+        <symbol id="i-italic" viewBox="0 0 24 24"><line x1="19" y1="4" x2="10" y2="4"></line><line x1="14" y1="20" x2="5" y2="20"></line><line x1="15" y1="4" x2="9" y2="20"></line></symbol>
+        <symbol id="i-trash" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></symbol>
+        <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></symbol>
+        <symbol id="i-video" viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></symbol>
+        <symbol id="i-history" viewBox="0 0 24 24"><path d="M3 3v5h5"></path><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"></path><path d="M12 7v5l4 2"></path></symbol>
+        <symbol id="i-undo" viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></symbol>
+        <symbol id="i-reset" viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></symbol>
+        <symbol id="i-chevron" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"></polyline></symbol>
+        <symbol id="i-list" viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></symbol>
+        <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></symbol>
+        <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></symbol>
+        <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></symbol>
+    </svg>
+
+    <div class="app-container" id="appContainer">
+        <header>
+            <button class="icon-btn" id="toggleSidebar"><svg class="icon"><use href="#i-menu"></use></svg></button>
+            <div class="logo">Nexus</div>
+            <div class="search-bar">
+                <svg class="icon"><use href="#i-search"></use></svg>
+                <input type="text" id="searchInput" placeholder="Search everything..." aria-label="Search">
+            </div>
+            <div class="header-actions">
+                <div class="sync-dot offline" id="syncDot" title="Offline"></div>
+                <button class="icon-btn" id="syncBtn" title="Sync Now"><svg class="icon"><use href="#i-sync"></use></svg></button>
+                <button class="icon-btn" id="historyBtn" title="Activity Log"><svg class="icon"><use href="#i-history"></use></svg></button>
+                <button class="btn btn-primary" id="loginBtn">Local Mode</button>
+            </div>
+        </header>
+
+        <aside id="sidebar">
+            <div class="nav-item active" data-view="dashboard"><svg class="icon"><use href="#i-grid"></use></svg> Dashboard</div>
+            <div class="nav-item" data-view="standard"><svg class="icon"><use href="#i-plus"></use></svg> All Notes</div>
+            <div class="nav-item" data-view="archive"><svg class="icon"><use href="#i-archive"></use></svg> Archive</div>
+            <div class="nav-section">Workspace</div>
+            <div class="nav-item" data-view="kanban"><svg class="icon"><use href="#i-kanban"></use></svg> Pending Works</div>
+            <div class="nav-item" data-view="database"><svg class="icon"><use href="#i-db"></use></svg> Client Database</div>
+            <div class="nav-item" data-view="prompt"><svg class="icon"><use href="#i-copy"></use></svg> Prompt Library</div>
+            <div class="nav-item" data-view="brand"><svg class="icon"><use href="#i-palette"></use></svg> Brand Kits</div>
+            <div class="nav-section">System</div>
+            <div class="nav-item" data-view="settings"><svg class="icon"><use href="#i-settings"></use></svg> Settings</div>
+        </aside>
+
+        <main id="mainContent"></main>
+    </div>
+
+    <div class="focus-overlay" id="focusOverlay">
+        <div class="focus-card" id="focusCard"></div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+    <div class="logger-panel" id="loggerPanel">
+        <div class="logger-header">
+            <strong>Activity Log</strong>
+            <button class="icon-btn" onclick="document.getElementById('loggerPanel').classList.remove('active')"><svg class="icon"><use href="#i-close"></use></svg></button>
+        </div>
+        <div class="logger-content" id="loggerContent"></div>
+    </div>
+
+    <div id="printArea"></div>
+
+    <script>
+        const Utils = {
+            uid: () => Date.now().toString(36) + Math.random().toString(36).substr(2),
+            debounce: (fn, delay) => { let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), delay); }; },
+            formatDate: (ts) => ts ? new Date(ts).toLocaleDateString() : 'N/A',
+            showToast: (msg, actionFn = null) => {
+                const t = document.getElementById('toast');
+                t.innerHTML = `<span>${msg}</span>`;
+                if (actionFn) {
+                    const btn = document.createElement('button');
+                    btn.className = 'btn btn-primary';
+                    btn.style.padding = '4px 12px';
+                    btn.style.fontSize = '0.8rem';
+                    btn.innerText = 'Undo';
+                    btn.onclick = () => { actionFn(); t.classList.remove('show'); };
+                    t.appendChild(btn);
+                }
+                t.classList.add('show');
+                setTimeout(() => t.classList.remove('show'), actionFn ? 4000 : 2000);
+            },
+            logActivity: (text) => {
+                App.activityLog.unshift({ text, time: new Date().toLocaleTimeString() });
+                if (App.activityLog.length > 30) App.activityLog.pop();
+                const el = document.getElementById('loggerContent');
+                if (el) {
+                    el.innerHTML = App.activityLog.map(l => `<div class="log-item"><strong>${l.time}</strong> - ${l.text}</div>`).join('');
+                }
+            },
+            downloadFile: (filename, content, type) => {
+                const blob = new Blob([content], { type });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = filename; a.click();
+                URL.revokeObjectURL(url);
+                Utils.showToast('Downloaded ' + filename);
+                Utils.logActivity(`Exported ${filename}`);
+            },
+            escapeHtml: (unsafe) => unsafe ? unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") : '',
+            getTextPreview: (html) => {
+                if (!html) return '';
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = html;
+                let text = tempDiv.innerText || '';
+                // Trim and remove excessive newlines that cause empty space
+                return text.replace(/\n{3,}/g, '\n\n').trim();
+            },
+            formatCurrency: (val) => {
+                const curr = App.state.settings.currency || 'USD';
+                return curr === 'INR' ? `₹${val}` : `$${val}`;
+            },
+            getContrastColor: (bgClass) => {
+                const lightColors = ['default', 'yellow', 'blue', 'pink', 'green', 'orange'];
+                const darkColors = ['yellow', 'blue', 'pink', 'green', 'orange'];
+                if (App.state.settings.mode === 'dark') {
+                    return darkColors.includes(bgClass) ? '#ffffff' : 'var(--text)';
+                } else {
+                    return lightColors.includes(bgClass) ? '#000000' : 'var(--text)';
+                }
+            },
+            getMonthBounds: (date = new Date()) => {
+                const start = new Date(date.getFullYear(), date.getMonth(), 1).getTime();
+                const end = new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59).getTime();
+                return { start, end };
+            }
+        };
+
+        const DB = {
+            db: null,
+            async init() {
+                return new Promise((resolve) => {
+                    const req = indexedDB.open('NexusNotesDB', 1);
+                    req.onupgradeneeded = (e) => {
+                        const db = e.target.result;
+                        if (!db.objectStoreNames.contains('state')) db.createObjectStore('state', { keyPath: 'id' });
+                    };
+                    req.onsuccess = (e) => { this.db = e.target.result; resolve(); };
+                });
+            },
+            async get(key) {
+                return new Promise((resolve) => {
+                    if (!this.db) return resolve(null);
+                    const tx = this.db.transaction('state', 'readonly');
+                    const req = tx.objectStore('state').get(key);
+                    req.onsuccess = () => resolve(req.result ? req.result.data : null);
+                });
+            },
+            async set(key, data) {
+                return new Promise((resolve) => {
+                    if (!this.db) return resolve();
+                    const tx = this.db.transaction('state', 'readwrite');
+                    tx.objectStore('state').put({ id: key, data });
+                    tx.oncomplete = () => resolve();
+                });
+            }
+        };
+
+        /* ==========================================================
+           GOOGLE DRIVE SYNC ENGINE
+           Architecture: Uses Google Identity Services (GIS) for OAuth.
+           Stores data in `appDataFolder` (hidden from user).
+           Simple Last-Modified-Wins conflict resolution.
+           ========================================================== */
+        const GDrive = {
+            CLIENT_ID: 'YOUR_GOOGLE_CLIENT_ID', // Replace with your OAuth 2.0 Client ID
+            API_KEY: 'YOUR_API_KEY', // Replace with your API Key
+            SCOPES: 'https://www.googleapis.com/auth/drive.appdata',
+            tokenClient: null,
+            gapiInited: false,
+            gisInited: false,
+            isSignedIn: false,
+            fileId: null,
+
+            init() {
+                if (this.CLIENT_ID === 'YOUR_GOOGLE_CLIENT_ID' || typeof gapi === 'undefined' || typeof google === 'undefined') {
+                    console.warn('Google Drive sync disabled. Add OAuth Client ID to enable.');
+                    App.setSyncStatus('offline');
+                    document.getElementById('loginBtn').innerText = 'Local Mode';
+                    return;
+                }
+                
+                gapi.load('client', async () => {
+                    await gapi.client.init({ apiKey: this.API_KEY, discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'] });
+                    this.gapiInited = true;
+                    this.tryInitAuth();
+                });
+
+                this.tokenClient = google.accounts.oauth2.initTokenClient({
+                    client_id: this.CLIENT_ID,
+                    scope: this.SCOPES,
+                    callback: (resp) => {
+                        if (resp.error) return;
+                        this.isSignedIn = true;
+                        document.getElementById('loginBtn').innerText = 'Synced';
+                        document.getElementById('loginBtn').disabled = true;
+                        this.sync();
+                    }
+                });
+                this.gisInited = true;
+                this.tryInitAuth();
+            },
+            
+            tryInitAuth() {
+                if (this.gapiInited && this.gisInited) {
+                    document.getElementById('loginBtn').innerText = 'Sign In';
+                }
+            },
+
+            login() {
+                if (this.CLIENT_ID === 'YOUR_GOOGLE_CLIENT_ID') {
+                    Utils.showToast('Add Google Client ID in code to sync.');
+                    return;
+                }
+                if (!this.gapiInited || !this.gisInited) {
+                    Utils.showToast('Google API still loading...');
+                    return;
+                }
+                this.tokenClient.requestAccessToken();
+            },
+
+            async sync() {
+                if (!this.isSignedIn) return;
+                App.setSyncStatus('syncing');
+                try {
+                    let file = await this.findFile();
+                    let driveData = null;
+                    
+                    if (file) {
+                        this.fileId = file.id;
+                        const res = await gapi.client.drive.files.get({ fileId: file.id, alt: 'media' });
+                        driveData = res.result;
+                    }
+
+                    const localData = App.state;
+                    
+                    if (driveData && driveData.lastModified > localData.lastModified) {
+                        // Drive is newer -> pull
+                        App.state = driveData;
+                        App.saveState(); 
+                        App.render();
+                    } else if (localData.lastModified > (driveData ? driveData.lastModified : 0)) {
+                        // Local is newer -> push
+                        const boundary = '-------314159265358979323846';
+                        const body = JSON.stringify(localData);
+                        const multipart = 
+                            `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n` +
+                            JSON.stringify({ name: 'nexus_notes.json', parents: ['appDataFolder'] }) +
+                            `\r\n--${boundary}\r\nContent-Type: application/json\r\n\r\n${body}\r\n--${boundary}--`;
+                        
+                        if (this.fileId) {
+                            await gapi.client.request({
+                                path: `/upload/drive/v3/files/${this.fileId}`,
+                                method: 'PATCH',
+                                params: { uploadType: 'multipart' },
+                                headers: { 'Content-Type': `multipart/related; boundary="${boundary}"` },
+                                body: multipart
+                            }).execute();
+                        } else {
+                            const res = await gapi.client.request({
+                                path: '/upload/drive/v3/files',
+                                method: 'POST',
+                                params: { uploadType: 'multipart' },
+                                headers: { 'Content-Type': `multipart/related; boundary="${boundary}"` },
+                                body: multipart
+                            }).execute();
+                            this.fileId = res.id;
+                        }
+                    }
+                    App.setSyncStatus('online');
+                    Utils.showToast('Sync complete');
+                } catch (err) {
+                    console.error('Sync Error:', err);
+                    App.setSyncStatus('offline');
+                    Utils.showToast('Sync failed. Check console.');
+                }
+            },
+            
+            async findFile() {
+                const res = await gapi.client.drive.files.list({
+                    spaces: 'appDataFolder',
+                    q: "name='nexus_notes.json'",
+                    fields: 'files(id, name, modifiedTime)'
+                });
+                return res.result.files.length > 0 ? res.result.files[0] : null;
+            }
+        };
+
+        const App = {
+            state: {
+                notes: [],
+                clients: [],
+                settings: { theme: 'saas', mode: 'dark', fontSize: 15, currency: 'USD' },
+                lastModified: 0,
+                dashboardFilter: 'all_time'
+            },
+            currentView: 'dashboard',
+            searchQuery: '',
+            focusedNoteId: null,
+            isCustomModalOpen: false,
+            dbFilters: { client: '', status: '', startDate: null, endDate: null, useStartDate: false, useEndDate: false },
+            activityLog: [],
+            undoStack: [],
+
+            async init() {
+                await DB.init();
+                const savedState = await DB.get('appState');
+                if (savedState) this.state = { ...this.state, ...savedState };
+                this.applyTheme();
+                this.bindEvents();
+                this.render();
+                GDrive.init();
+                Utils.logActivity('Application Initialized');
+            },
+
+            bindEvents() {
+                document.getElementById('loginBtn').addEventListener('click', () => GDrive.login());
+                document.getElementById('syncBtn').addEventListener('click', () => {
+                    if (GDrive.isSignedIn) GDrive.sync();
+                    else Utils.showToast('Click "Sign In" to connect Google Drive.');
+                });
+                document.getElementById('historyBtn').addEventListener('click', () => document.getElementById('loggerPanel').classList.toggle('active'));
+                document.getElementById('toggleSidebar').addEventListener('click', () => document.getElementById('sidebar').classList.toggle('open'));
+                
+                document.querySelectorAll('.nav-item').forEach(item => {
+                    item.addEventListener('click', () => {
+                        this.currentView = item.dataset.view;
+                        document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+                        item.classList.add('active');
+                        this.render();
+                    });
+                });
+
+                document.getElementById('searchInput').addEventListener('input', Utils.debounce((e) => {
+                    this.searchQuery = e.target.value.toLowerCase();
+                    this.render();
+                }, 300));
+
+                document.getElementById('focusOverlay').addEventListener('click', (e) => {
+                    if (e.target.id === 'focusOverlay') this.closeModal();
+                });
+                
+                document.addEventListener('click', (e) => {
+                    if (!e.target.closest('.nx-dropdown')) {
+                        document.querySelectorAll('.nx-dropdown-menu.active').forEach(m => m.classList.remove('active'));
+                    }
+                    if (!e.target.closest('.nx-calendar') && !e.target.closest('[data-cal-trigger]')) {
+                        document.querySelectorAll('.nx-calendar.active').forEach(m => m.remove());
+                    }
+                });
+            },
+
+            saveState() {
+                this.state.lastModified = Date.now();
+                DB.set('appState', this.state);
+                if (GDrive.isSignedIn) Utils.debounce(() => GDrive.sync(), 2000)(); // Auto-sync if online
+            },
+
+            setSyncStatus(status) {
+                document.getElementById('syncDot').className = 'sync-dot ' + status;
+            },
+
+            applyTheme() {
+                document.documentElement.setAttribute('data-theme', this.state.settings.theme);
+                document.documentElement.setAttribute('data-mode', this.state.settings.mode);
+                document.body.style.fontSize = this.state.settings.fontSize + 'px';
+            },
+
+            render() {
+                if (this.focusedNoteId || this.isCustomModalOpen) return;
+                const main = document.getElementById('mainContent');
+                main.innerHTML = '';
+                ViewRenderer.clearPopups();
+                
+                switch(this.currentView) {
+                    case 'dashboard': ViewRenderer.renderDashboard(main); break;
+                    case 'standard': ViewRenderer.renderNotes(main); break;
+                    case 'archive': ViewRenderer.renderArchive(main); break;
+                    case 'kanban': ViewRenderer.renderKanban(main); break;
+                    case 'database': ViewRenderer.renderDatabase(main); break;
+                    case 'prompt': ViewRenderer.renderPrompts(main); break;
+                    case 'brand': ViewRenderer.renderBrands(main); break;
+                    case 'settings': ViewRenderer.renderSettings(main); break;
+                }
+                ViewRenderer.attachDragAndDrop();
+            },
+
+            openFocusView(id) {
+                this.focusedNoteId = id;
+                this.isCustomModalOpen = false;
+                document.getElementById('appContainer').classList.add('blurred');
+                document.getElementById('focusOverlay').classList.add('active');
+                ViewRenderer.renderFocusCard();
+            },
+
+            openCustomModal(html) {
+                this.focusedNoteId = null;
+                this.isCustomModalOpen = true;
+                const card = document.getElementById('focusCard');
+                card.style.background = 'var(--bg-tertiary)';
+                card.style.color = 'var(--text)';
+                card.className = 'focus-card';
+                card.innerHTML = html;
+                document.getElementById('appContainer').classList.add('blurred');
+                document.getElementById('focusOverlay').classList.add('active');
+            },
+
+            closeModal() {
+                this.focusedNoteId = null;
+                this.isCustomModalOpen = false;
+                document.getElementById('appContainer').classList.remove('blurred');
+                document.getElementById('focusOverlay').classList.remove('active');
+                this.saveState();
+                this.render();
+            },
+
+            addNote(type, data = {}) {
+                const note = {
+                    id: Utils.uid(), type, title: '', content: '', created: Date.now(),
+                    pinned: false, archived: false, bgColor: 'default', ...data
+                };
+                if (type === 'kanban') {
+                    note.status = note.status || 'Pending';
+                    note.order = note.order || Date.now();
+                    note.videos = note.videos !== undefined ? note.videos : 1; // Default to 1
+                    note.price = note.price || 0;
+                    note.pricingType = note.pricingType || 'total';
+                    note.receivedDate = note.receivedDate || Date.now(); // Default to today
+                }
+                if (type === 'standard' && note.isChecklist) {
+                    note.items = note.items || [];
+                }
+                this.state.notes.unshift(note);
+                this.saveState();
+                Utils.logActivity(`Created new ${type} note`);
+                return note;
+            },
+
+            calculateTaskRevenue(task) {
+                const client = App.state.clients.find(c => c.id === task.clientId);
+                if (client && client.paymentType === 'monthly') return 0; // Monthly clients don't have per-task revenue
+                const videos = task.videos || 0;
+                const price = task.price || 0;
+                return task.pricingType === 'per_video' ? videos * price : price;
+            },
+
+            handleClientInput(noteId, name) {
+                if (!name) { App.updateNote(noteId, 'clientId', ''); return; }
+                let client = App.state.clients.find(c => c.name.toLowerCase() === name.toLowerCase());
+                if (!client) {
+                    const colors = ['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#6366f1', '#8b5cf6', '#ec4899'];
+                    const color = colors[App.state.clients.length % colors.length];
+                    client = { id: Utils.uid(), name: name, color: color, email: '', company: '', paymentType: 'per_video', monthlySalary: 0 };
+                    App.state.clients.push(client);
+                    App.saveState();
+                    Utils.logActivity(`Created client: ${name}`);
+                    Utils.showToast(`Client "${name}" created`);
+                }
+                App.updateNote(noteId, 'clientId', client.id);
+            },
+
+            undoDelete() {
+                const action = this.undoStack.pop();
+                if (action && action.type === 'delete') {
+                    this.state.notes.unshift(action.note);
+                    this.saveState();
+                    Utils.logActivity(`Restored: ${action.note.title || 'Untitled'}`);
+                    this.render();
+                }
+            },
+
+            addChecklistItem(id) {
+                const note = this.state.notes.find(n => n.id === id);
+                if (note) {
+                    if (!note.items) note.items = [];
+                    note.items.push({ text: '', done: false });
+                    this.saveState();
+                    ViewRenderer.renderFocusCard();
+                }
+            },
+
+            updateChecklistItem(id, index, text) {
+                const note = this.state.notes.find(n => n.id === id);
+                if (note && note.items[index]) {
+                    note.items[index].text = text;
+                    this.saveState();
+                }
+            },
+
+            toggleChecklistItem(id, index, checked) {
+                const note = this.state.notes.find(n => n.id === id);
+                if (note && note.items[index]) {
+                    note.items[index].done = checked;
+                    this.saveState();
+                    ViewRenderer.renderFocusCard(); 
+                }
+            },
+
+            deleteChecklistItem(id, index) {
+                const note = this.state.notes.find(n => n.id === id);
+                if (note) {
+                    note.items.splice(index, 1);
+                    this.saveState();
+                    ViewRenderer.renderFocusCard();
+                }
+            }
+        };
+
+        const ViewRenderer = {
+            popups: [], 
+
+            clearPopups() {
+                this.popups.forEach(p => p.remove());
+                this.popups = [];
+            },
+
+            renderDashboard(main) {
+                const filter = App.state.dashboardFilter;
+                const bounds = Utils.getMonthBounds();
+                const tasks = App.state.notes.filter(n => n.type === 'kanban' && !n.archived);
+
+                const stats = {
+                    pendingVideos: tasks.filter(t => t.status !== 'Completed').reduce((s, t) => s + (t.videos || 0), 0),
+                    completedVideos: 0,
+                    earned: 0,
+                    pendingAmount: 0
+                };
+
+                tasks.forEach(t => {
+                    const client = App.state.clients.find(c => c.id === t.clientId);
+                    const taskRevenue = App.calculateTaskRevenue(t);
+                    
+                    if (t.status === 'Completed') {
+                        if (filter === 'this_month' && t.completedDate) {
+                            if (t.completedDate >= bounds.start && t.completedDate <= bounds.end) {
+                                stats.completedVideos += (t.videos || 0);
+                                if (client && client.paymentType === 'monthly') {
+                                    // Handled separately below
+                                } else {
+                                    stats.earned += taskRevenue;
+                                }
+                            }
+                        } else if (filter === 'all_time') {
+                            stats.completedVideos += (t.videos || 0);
+                            if (!(client && client.paymentType === 'monthly')) {
+                                stats.earned += taskRevenue;
+                            }
+                        }
+                    } else {
+                        stats.pendingAmount += taskRevenue;
+                    }
+                });
+
+                // Calculate Monthly Client Earnings separately (X$ for every active month)
+                const monthlyClients = App.state.clients.filter(c => c.paymentType === 'monthly');
+                monthlyClients.forEach(c => {
+                    const clientTasks = tasks.filter(t => t.clientId === c.id && t.status === 'Completed' && t.completedDate);
+                    const activeMonths = new Set();
+                    clientTasks.forEach(t => {
+                        const d = new Date(t.completedDate);
+                        const monthYear = d.getMonth() + '_' + d.getFullYear();
+                        if (filter === 'this_month') {
+                            if (t.completedDate >= bounds.start && t.completedDate <= bounds.end) {
+                                activeMonths.add(monthYear);
+                            }
+                        } else {
+                            activeMonths.add(monthYear);
+                        }
+                    });
+                    stats.earned += activeMonths.size * (c.monthlySalary || 0);
+                });
+
+                main.innerHTML = `
+                    <div class="view-header">
+                        <h1>Dashboard</h1>
+                        <div class="nx-dropdown" style="width: 150px;" id="dashFilterDd">
+                            <div class="nx-dropdown-trigger" onclick="ViewRenderer.toggleDropdown('dashFilterMenu', this)">
+                                <span>${filter === 'all_time' ? 'All Time' : 'This Month'}</span>
+                                <svg class="icon" style="width:14px;height:14px;"><use href="#i-chevron"></use></svg>
+                            </div>
+                        </div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin: 24px 0;">
+                        <div class="card" style="border-left: 4px solid #f59e0b;">
+                            <div style="color: var(--text-secondary); font-size: 0.85rem; text-transform: uppercase;">Pending Videos</div>
+                            <div style="font-size: 2rem; font-weight: bold;">${stats.pendingVideos}</div>
+                        </div>
+                        <div class="card" style="border-left: 4px solid #10b981;">
+                            <div style="color: var(--text-secondary); font-size: 0.85rem; text-transform: uppercase;">Completed (${filter === 'all_time' ? 'All' : 'Month'})</div>
+                            <div style="font-size: 2rem; font-weight: bold;">${stats.completedVideos}</div>
+                        </div>
+                        <div class="card" style="border-left: 4px solid #6366f1;">
+                            <div style="color: var(--text-secondary); font-size: 0.85rem; text-transform: uppercase;">Earned (${filter === 'all_time' ? 'All' : 'Month'})</div>
+                            <div style="font-size: 2rem; font-weight: bold;">${Utils.formatCurrency(stats.earned)}</div>
+                        </div>
+                        <div class="card" style="border-left: 4px solid #ef4444;">
+                            <div style="color: var(--text-secondary); font-size: 0.85rem; text-transform: uppercase;">Pending Amount</div>
+                            <div style="font-size: 2rem; font-weight: bold;">${Utils.formatCurrency(stats.pendingAmount)}</div>
+                        </div>
+                    </div>
+                    <div class="view-header"><h2>Recent Notes & Tasks</h2></div>
+                    <div class="notes-grid" id="dashboardGrid">
+                        ${this.renderNoteCards(App.state.notes.filter(n => !n.archived && (n.type === 'standard' || n.type === 'kanban')).slice(0, 8))}
+                    </div>
+                `;
+                
+                const ddMenuHtml = `
+                    <div class="nx-dropdown-menu" id="dashFilterMenu">
+                        <div class="nx-dropdown-item" onclick="App.state.dashboardFilter='all_time'; App.render();">All Time</div>
+                        <div class="nx-dropdown-item" onclick="App.state.dashboardFilter='this_month'; App.render();">This Month</div>
+                    </div>
+                `;
+                document.getElementById('dashFilterDd').insertAdjacentHTML('beforeend', ddMenuHtml);
+            },
+
+            renderNotes(main) {
+                main.innerHTML = `
+                    <div class="view-header">
+                        <h1>My Notes</h1>
+                        <div style="display:flex; gap:8px;">
+                            <button class="btn" onclick="App.openFocusView(App.addNote('standard', {isChecklist: true}).id)"><svg class="icon" style="width:16px;height:16px;"><use href="#i-list"></use></svg> New Checklist</button>
+                            <button class="btn btn-primary" onclick="App.openFocusView(App.addNote('standard').id)"><svg class="icon" style="width:16px;height:16px;"><use href="#i-plus"></use></svg> New Note</button>
+                        </div>
+                    </div>
+                    <div class="notes-grid" id="notesGrid">${this.renderNoteCards(this.filterNotes('standard'))}</div>
+                `;
+            },
+
+            renderArchive(main) {
+                main.innerHTML = `
+                    <div class="view-header">
+                        <h1>Archived Notes</h1>
+                    </div>
+                    <div class="notes-grid">${this.renderNoteCards(App.state.notes.filter(n => n.archived))}</div>
+                `;
+            },
+
+            renderNoteCards(notes) {
+                if(!notes.length) return '<p style="color: var(--text-secondary);">Nothing here yet.</p>';
+                return notes.map(note => {
+                    const isKanban = note.type === 'kanban';
+                    const client = isKanban ? App.state.clients.find(c => c.id === note.clientId) : null;
+                    const borderColor = client ? `border-left: 4px solid ${client.color};` : '';
+                    const bgColorClass = note.bgColor !== 'default' ? `var(--note-c-${note.bgColor})` : 'var(--note-c-default)';
+                    const textColor = Utils.getContrastColor(note.bgColor);
+                    const showActions = App.currentView !== 'dashboard'; 
+                    
+                    let contentPreview = '';
+                    if (note.isChecklist && note.items) {
+                        contentPreview = note.items.slice(0, 5).map(item => `
+                            <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px; font-size:0.9rem; ${item.done ? 'opacity:0.6; text-decoration:line-through;' : ''}">
+                                <div style="width:14px; height:14px; border:1px solid currentColor; border-radius:3px; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                                    ${item.done ? '<svg style="width:10px;height:10px;stroke:currentColor;stroke-width:3;fill:none;stroke-linecap:round;stroke-linejoin:round;"><polyline points="20 6 9 17 4 12"></polyline></svg>' : ''}
+                                </div>
+                                <span>${Utils.escapeHtml(item.text)}</span>
+                            </div>
+                        `).join('');
+                        if (note.items.length > 5) contentPreview += `<div style="font-size:0.8rem; opacity:0.7; margin-top:4px;">+ ${note.items.length - 5} more</div>`;
+                    } else {
+                        contentPreview = Utils.escapeHtml(Utils.getTextPreview(note.content));
+                    }
+                    
+                    return `
+                        <div class="card" style="background: ${bgColorClass}; color: ${textColor}; ${borderColor}" 
+                             onclick="App.openFocusView('${note.id}')" data-id="${note.id}" draggable="true" ondblclick="App.openFocusView('${note.id}')">
+                            ${showActions ? `
+                            <div class="card-overlay">
+                                <button class="icon-btn" style="padding: 4px; color: ${textColor};" onclick="event.stopPropagation(); App.togglePin('${note.id}')" title="Pin">
+                                    <svg class="icon" style="width:16px;height:16px; ${note.pinned ? 'fill:currentColor' : ''}"><use href="#i-pin"></use></svg>
+                                </button>
+                                <button class="icon-btn" style="padding: 4px; color: ${textColor};" onclick="event.stopPropagation(); App.deleteNote('${note.id}')" title="Delete">
+                                    <svg class="icon" style="width:16px;height:16px;"><use href="#i-trash"></use></svg>
+                                </button>
+                            </div>` : ''}
+                            <h3 style="margin-bottom: 4px; font-size: 1.1rem;">${Utils.escapeHtml(note.title) || 'Untitled'}</h3>
+                            <div style="font-size: 0.9rem; opacity: 0.8; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; white-space: pre-wrap; margin-top: 6px;">
+                                ${contentPreview}
+                            </div>
+                            ${isKanban ? `<div style="margin-top:12px; display:flex; justify-content:space-between; font-size:0.8rem; opacity:0.9; border-top:1px solid rgba(128,128,128,0.2); padding-top:8px;">
+                                <span>${client ? client.name : 'No Client'}</span>
+                                <div style="display:flex; gap:8px;">
+                                    <span style="display:flex; align-items:center; gap:4px;">
+                                        <svg style="width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
+                                        ${note.videos || 0}
+                                    </span>
+                                    <span>${Utils.formatCurrency(App.calculateTaskRevenue(note))}</span>
+                                </div>
+                            </div>` : ''}
+                        </div>
+                    `;
+                }).join('');
+            },
+
+            renderKanban(main) {
+                const tasks = this.filterNotes('kanban').sort((a,b) => (a.order || 0) - (b.order || 0));
+                const cols = ['Pending', 'In Progress', 'Revision', 'Completed'];
+                
+                main.innerHTML = `
+                    <div class="view-header">
+                        <h1>Pending Works</h1>
+                        <div style="display:flex; gap:10px;">
+                            <button class="btn" onclick="ViewRenderer.manageClientsModal()">Manage Clients</button>
+                            <button class="btn btn-primary" onclick="App.openFocusView(App.addNote('kanban').id)">+ New Task</button>
+                        </div>
+                    </div>
+                    <div class="kanban-board">
+                        ${cols.map(col => `
+                            <div class="kanban-col" data-status="${col}">
+                                <div class="kanban-col-header">${col} <span style="color:var(--text-secondary)">${tasks.filter(t => t.status === col).length}</span></div>
+                                <div class="kanban-cards" data-status="${col}">
+                                    ${tasks.filter(t => t.status === col).map(t => this.renderKanbanCard(t)).join('')}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+                this.attachKanbanDnD();
+            },
+
+            renderKanbanCard(t) {
+                const client = App.state.clients.find(c => c.id === t.clientId);
+                const borderColor = client ? `border-left: 4px solid ${client.color};` : '';
+                const revenue = client && client.paymentType === 'monthly' ? 'Monthly' : Utils.formatCurrency(App.calculateTaskRevenue(t));
+                return `
+                    <div class="kanban-card ${t.status === 'Completed' ? 'completed' : ''}" 
+                         style="${borderColor}" data-id="${t.id}" draggable="true" ondblclick="App.openFocusView('${t.id}')">
+                        <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:8px;">
+                            <h4 style="font-size: 1rem;">${Utils.escapeHtml(t.title) || 'Untitled Task'}</h4>
+                            <button class="icon-btn" style="padding: 2px;" onclick="event.stopPropagation(); App.toggleKanbanComplete('${t.id}')" title="Toggle Complete">
+                                <svg class="icon" style="width:16px;height:16px; ${t.status === 'Completed' ? 'stroke:#10b981; stroke-width:3;' : ''}"><use href="#i-check"></use></svg>
+                            </button>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; font-size:0.85rem; color:var(--text-secondary);">
+                            <div><strong>Client:</strong> ${client ? client.name : 'N/A'}</div>
+                            <div style="display:flex; gap:8px;">
+                                <span style="display:flex; align-items:center; gap:4px;">
+                                    <svg style="width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
+                                    ${t.videos || 0}
+                                </span>
+                                <span>${revenue}</span>
+                            </div>
+                        </div>
+                        <div style="margin-top:6px; font-size:0.8rem; color:var(--text-secondary);">
+                            <strong>Received:</strong> ${Utils.formatDate(t.receivedDate)} | <strong>Completed:</strong> ${Utils.formatDate(t.completedDate)}
+                        </div>
+                    </div>
+                `;
+            },
+
+            renderDatabase(main) {
+                let tasks = App.state.notes.filter(n => n.type === 'kanban' && !n.archived);
+                const filters = App.dbFilters;
+
+                if (filters.client) tasks = tasks.filter(t => t.clientId === filters.client);
+                if (filters.status) tasks = tasks.filter(t => t.status === filters.status);
+                if (filters.useStartDate && filters.startDate) tasks = tasks.filter(t => t.completedDate && t.completedDate >= filters.startDate);
+                if (filters.useEndDate && filters.endDate) {
+                    const end = filters.endDate + 86400000; 
+                    tasks = tasks.filter(t => t.completedDate && t.completedDate <= end);
+                }
+
+                const clients = App.state.clients.map(c => {
+                    const cTasks = tasks.filter(t => t.clientId === c.id);
+                    let completedRevenue = 0;
+                    let pendingRevenue = 0;
+                    let totalRevenue = 0;
+
+                    if (c.paymentType === 'monthly') {
+                        const completedTasks = cTasks.filter(t => t.status === 'Completed' && t.completedDate);
+                        const activeMonths = new Set();
+                        completedTasks.forEach(t => {
+                            const d = new Date(t.completedDate);
+                            activeMonths.add(d.getMonth() + '_' + d.getFullYear());
+                        });
+                        completedRevenue = activeMonths.size * (c.monthlySalary || 0);
+                        pendingRevenue = 0; 
+                    } else {
+                        completedRevenue = cTasks.filter(t => t.status === 'Completed').reduce((s, t) => s + App.calculateTaskRevenue(t), 0);
+                        pendingRevenue = cTasks.filter(t => t.status !== 'Completed').reduce((s, t) => s + App.calculateTaskRevenue(t), 0);
+                    }
+                    
+                    return {
+                        ...c,
+                        totalVideos: cTasks.reduce((s, t) => s + (t.videos || 0), 0),
+                        totalRevenue: completedRevenue + pendingRevenue,
+                        pendingRevenue,
+                        completedRevenue,
+                        lastCompleted: cTasks.filter(t => t.completedDate).sort((a,b) => b.completedDate - a.completedDate)[0]?.completedDate || null
+                    };
+                }).filter(c => c.totalVideos > 0 || c.totalRevenue > 0); 
+
+                const startDateStr = filters.startDate ? new Date(filters.startDate).toLocaleDateString() : 'N/A';
+                const endDateStr = filters.endDate ? new Date(filters.endDate).toLocaleDateString() : 'N/A';
+
+                main.innerHTML = `
+                    <div class="view-header">
+                        <h1>Client Database</h1>
+                        <div style="display:flex; gap:10px;">
+                            <button class="btn" onclick="Utils.downloadFile('clients.csv', ViewRenderer.exportCSV(), 'text/csv')">Export CSV</button>
+                            <button class="btn" onclick="ViewRenderer.generatePDF()">Export PDF</button>
+                        </div>
+                    </div>
+                    <div class="db-filters">
+                        <input type="text" class="input-modern" placeholder="Search..." value="${filters.text || ''}" oninput="App.dbFilters.text = this.value.toLowerCase(); App.render()" style="flex-grow:1; min-width:120px;">
+                        
+                        <div class="nx-dropdown" style="width: 150px;">
+                            <div class="nx-dropdown-trigger" onclick="ViewRenderer.toggleDropdown('dbClientMenu', this)">
+                                <span>${App.state.clients.find(c=>c.id===filters.client)?.name || 'All Clients'}</span>
+                                <svg class="icon" style="width:14px;height:14px;"><use href="#i-chevron"></use></svg>
+                            </div>
+                            <div class="nx-dropdown-menu" id="dbClientMenu">
+                                <div class="nx-dropdown-item" onclick="App.dbFilters.client=''; App.render();">All Clients</div>
+                                ${App.state.clients.map(c => `<div class="nx-dropdown-item" onclick="App.dbFilters.client='${c.id}'; App.render();">${c.name}</div>`).join('')}
+                            </div>
+                        </div>
+
+                        <div class="nx-dropdown" style="width: 120px;">
+                            <div class="nx-dropdown-trigger" onclick="ViewRenderer.toggleDropdown('dbStatusMenu', this)">
+                                <span>${filters.status || 'All Status'}</span>
+                                <svg class="icon" style="width:14px;height:14px;"><use href="#i-chevron"></use></svg>
+                            </div>
+                            <div class="nx-dropdown-menu" id="dbStatusMenu">
+                                <div class="nx-dropdown-item" onclick="App.dbFilters.status=''; App.render();">All Status</div>
+                                <div class="nx-dropdown-item" onclick="App.dbFilters.status='Pending'; App.render();">Pending</div>
+                                <div class="nx-dropdown-item" onclick="App.dbFilters.status='In Progress'; App.render();">In Progress</div>
+                                <div class="nx-dropdown-item" onclick="App.dbFilters.status='Revision'; App.render();">Revision</div>
+                                <div class="nx-dropdown-item" onclick="App.dbFilters.status='Completed'; App.render();">Completed</div>
+                            </div>
+                        </div>
+
+                        <div class="db-filter-group">
+                            <input type="checkbox" class="nx-checkbox" ${filters.useStartDate ? 'checked' : ''} onchange="App.dbFilters.useStartDate = this.checked; App.render()">
+                            <button class="db-date-btn" data-cal-trigger onclick="ViewRenderer.toggleFilterCalendar(event, 'startDate')">
+                                <svg class="icon" style="width:14px;height:14px;"><use href="#i-calendar"></use></svg>
+                                Start: ${startDateStr}
+                            </button>
+                        </div>
+                        
+                        <div class="db-filter-group">
+                            <input type="checkbox" class="nx-checkbox" ${filters.useEndDate ? 'checked' : ''} onchange="App.dbFilters.useEndDate = this.checked; App.render()">
+                            <button class="db-date-btn" data-cal-trigger onclick="ViewRenderer.toggleFilterCalendar(event, 'endDate')">
+                                <svg class="icon" style="width:14px;height:14px;"><use href="#i-calendar"></use></svg>
+                                End: ${endDateStr}
+                            </button>
+                        </div>
+
+                        <button class="icon-btn" onclick="App.dbFilters = { client: '', status: '', startDate: null, endDate: null, useStartDate: false, useEndDate: false }; App.render();" title="Reset Filters">
+                            <svg class="icon"><use href="#i-reset"></use></svg>
+                        </button>
+                    </div>
+                    <table class="db-table">
+                        <thead><tr>
+                            <th>Client</th><th>Type</th><th>Videos</th><th>Pending Amount</th><th>Earned Amount</th><th>Total Revenue</th><th>Last Completed</th>
+                        </tr></thead>
+                        <tbody>
+                            ${clients.map(c => `
+                                <tr>
+                                    <td style="color:${c.color}; font-weight:bold;">${c.name}</td>
+                                    <td>${c.paymentType === 'monthly' ? 'Monthly' : 'Per Video'}</td>
+                                    <td>${c.totalVideos}</td>
+                                    <td style="color:#f59e0b;">${Utils.formatCurrency(c.pendingRevenue)}</td>
+                                    <td style="color:#10b981;">${Utils.formatCurrency(c.completedRevenue)}</td>
+                                    <td><strong>${Utils.formatCurrency(c.totalRevenue)}</strong></td>
+                                    <td>${Utils.formatDate(c.lastCompleted)}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `;
+            },
+
+            generatePDF() {
+                let tasks = App.state.notes.filter(n => n.type === 'kanban' && !n.archived);
+                const filters = App.dbFilters;
+
+                if (filters.text) tasks = tasks.filter(t => t.title.toLowerCase().includes(filters.text));
+                if (filters.client) tasks = tasks.filter(t => t.clientId === filters.client);
+                if (filters.status) tasks = tasks.filter(t => t.status === filters.status);
+                if (filters.useStartDate && filters.startDate) tasks = tasks.filter(t => t.completedDate && t.completedDate >= filters.startDate);
+                if (filters.useEndDate && filters.endDate) {
+                    const end = filters.endDate + 86400000; 
+                    tasks = tasks.filter(t => t.completedDate && t.completedDate <= end);
+                }
+
+                const client = App.state.clients.find(c => c.id === filters.client);
+                const clientName = client ? client.name : 'All Clients';
+                
+                let dateRangeStr = 'All Time';
+                if (filters.useStartDate || filters.useEndDate) {
+                    const start = filters.useStartDate ? new Date(filters.startDate).toLocaleDateString() : 'Beginning';
+                    const end = filters.useEndDate ? new Date(filters.endDate).toLocaleDateString() : 'Present';
+                    dateRangeStr = `${start} to ${end}`;
+                }
+
+                let totalRevenue = 0;
+                const monthlyClients = App.state.clients.filter(c => c.paymentType === 'monthly');
+                monthlyClients.forEach(c => {
+                    const clientTasks = tasks.filter(t => t.clientId === c.id && t.status === 'Completed' && t.completedDate);
+                    const activeMonths = new Set();
+                    clientTasks.forEach(t => {
+                        const d = new Date(t.completedDate);
+                        activeMonths.add(d.getMonth() + '_' + d.getFullYear());
+                    });
+                    totalRevenue += activeMonths.size * (c.monthlySalary || 0);
+                });
+
+                tasks.forEach(t => {
+                    const c = App.state.clients.find(cl => cl.id === t.clientId);
+                    if (!c || c.paymentType !== 'monthly') {
+                        totalRevenue += App.calculateTaskRevenue(t);
+                    }
+                });
+
+                const printArea = document.getElementById('printArea');
+                let tableRows = tasks.map(t => {
+                    const c = App.state.clients.find(cl => cl.id === t.clientId);
+                    const revenue = c && c.paymentType === 'monthly' ? 'Monthly' : Utils.formatCurrency(App.calculateTaskRevenue(t));
+                    return `
+                        <tr>
+                            <td>${Utils.formatDate(t.completedDate || t.receivedDate)}</td>
+                            <td>${Utils.escapeHtml(t.title)}</td>
+                            <td>${c ? c.name : 'N/A'}</td>
+                            <td>${t.status}</td>
+                            <td>${t.videos || 0}</td>
+                            <td style="text-align: right;">${revenue}</td>
+                        </tr>
+                    `;
+                }).join('');
+
+                printArea.innerHTML = `
+                    <div class="pdf-header">
+                        <h1>${clientName} - Work Report</h1>
+                        <p>Date Range: ${dateRangeStr}</p>
+                    </div>
+                    <table class="pdf-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th><th>Project/Task</th><th>Client</th><th>Status</th><th>Videos</th><th style="text-align: right;">Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>${tableRows}</tbody>
+                    </table>
+                    <div class="pdf-total">Total Revenue: ${Utils.formatCurrency(totalRevenue)}</div>
+                    <div class="pdf-footer">
+                        Generated by Nexus Workspace on ${new Date().toLocaleDateString()}
+                    </div>
+                `;
+                window.print();
+            },
+
+            renderPrompts(main) {
+                const prompts = this.filterNotes('prompt').sort((a,b) => (b.pinned?1:0) - (a.pinned?1:0));
+                main.innerHTML = `
+                    <div class="view-header">
+                        <h1>Prompt Library</h1>
+                        <button class="btn btn-primary" onclick="App.openFocusView(App.addNote('prompt').id)">+ New Prompt</button>
+                    </div>
+                    <div class="notes-grid">
+                        ${prompts.map(p => `
+                            <div class="card" onclick="App.openFocusView('${p.id}')" data-id="${p.id}" draggable="true" ondblclick="App.openFocusView('${p.id}')">
+                                <div class="card-overlay">
+                                    <button class="icon-btn" style="padding: 4px;" onclick="event.stopPropagation(); App.togglePin('${p.id}')">
+                                        <svg class="icon" style="width:16px;height:16px; ${p.pinned ? 'fill:currentColor' : ''}"><use href="#i-pin"></use></svg>
+                                    </button>
+                                    <button class="icon-btn" style="padding: 4px;" onclick="event.stopPropagation(); Utils.copyToClipboard('${p.id}')">
+                                        <svg class="icon" style="width:16px;height:16px;"><use href="#i-copy"></use></svg>
+                                    </button>
+                                </div>
+                                <h3 style="margin-bottom: 4px;">${Utils.escapeHtml(p.title) || 'Untitled Prompt'}</h3>
+                                <div style="font-size: 0.75rem; background: var(--bg-secondary); padding: 2px 6px; border-radius: 4px; display: inline-block; margin-bottom: 8px; color: var(--accent); align-self: flex-start;">${p.category || 'General'}</div>
+                                <div style="font-size: 0.85rem; color: var(--text-secondary); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; white-space: pre-wrap; margin-top: 6px;">
+                                    ${Utils.escapeHtml(Utils.getTextPreview(p.content))}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            },
+
+            renderBrands(main) {
+                const brands = this.filterNotes('brand');
+                main.innerHTML = `
+                    <div class="view-header">
+                        <h1>Brand Kits</h1>
+                        <button class="btn btn-primary" onclick="App.openFocusView(App.addNote('brand', {colors: ['#6366f1', '#000000', '#ffffff', '#f59e0b', '#10b981'], headingFont: 'Inter', bodyFont: 'Roboto'}).id)">+ New Brand Kit</button>
+                    </div>
+                    <div class="notes-grid">
+                        ${brands.map(b => `
+                            <div class="card brand-card" onclick="App.openFocusView('${b.id}')" data-id="${b.id}" draggable="true" ondblclick="App.openFocusView('${b.id}')" style="padding:0; cursor:pointer;">
+                                <div class="brand-preview" style="background: ${b.colors[0] || '#ccc'}; color: ${Utils.getContrastColor(b.colors[0])}; min-height: 80px; display:flex; align-items:center; justify-content:center;">
+                                    <h3 style="margin:0; font-family: ${b.headingFont};">${Utils.escapeHtml(b.title) || 'Brand Name'}</h3>
+                                </div>
+                                <div class="brand-colors-list">
+                                    ${(b.colors || []).slice(0, 5).map(c => `
+                                        <div class="brand-color-row">
+                                            <div class="brand-color-swatch" style="background: ${c};"></div>
+                                            <span style="font-family: monospace; font-size: 0.8rem;">${c.toUpperCase()}</span>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                                <div class="brand-fonts" style="border-top: 1px solid var(--border); padding: 12px 16px;">
+                                    <div style="font-family: ${b.headingFont};">Heading: ${b.headingFont || 'Default'}</div>
+                                    <div style="font-family: ${b.bodyFont};">Body: ${b.bodyFont || 'Default'}</div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            },
+
+            renderSettings(main) {
+                main.innerHTML = `
+                    <h1>Settings</h1>
+                    <div class="settings-container">
+                        <div class="settings-card">
+                            <div class="settings-section-title">Appearance</div>
+                            <div class="settings-row">
+                                <div class="settings-info">
+                                    <div class="settings-label">Theme</div>
+                                    <div class="settings-desc">Select the visual style of the workspace.</div>
+                                </div>
+                                <div class="segmented-control">
+                                    <button class="seg-btn ${App.state.settings.theme==='saas'?'active':''}" onclick="App.state.settings.theme='saas'; App.applyTheme(); App.saveState(); App.render();">SaaS</button>
+                                    <button class="seg-btn ${App.state.settings.theme==='clean'?'active':''}" onclick="App.state.settings.theme='clean'; App.applyTheme(); App.saveState(); App.render();">Clean</button>
+                                    <button class="seg-btn ${App.state.settings.theme==='keep'?'active':''}" onclick="App.state.settings.theme='keep'; App.applyTheme(); App.saveState(); App.render();">Keep</button>
+                                </div>
+                            </div>
+                            <div class="settings-row">
+                                <div class="settings-info">
+                                    <div class="settings-label">Dark Mode</div>
+                                    <div class="settings-desc">Toggle between light and dark color schemes.</div>
+                                </div>
+                                <label class="nx-switch">
+                                    <input type="checkbox" ${App.state.settings.mode==='dark'?'checked':''} onchange="App.state.settings.mode = this.checked ? 'dark' : 'light'; App.applyTheme(); App.saveState(); App.render();">
+                                    <span class="nx-slider"></span>
+                                </label>
+                            </div>
+                            <div class="settings-row">
+                                <div class="settings-info">
+                                    <div class="settings-label">Currency</div>
+                                    <div class="settings-desc">Set the default currency for all revenue tracking.</div>
+                                </div>
+                                <div class="segmented-control">
+                                    <button class="seg-btn ${App.state.settings.currency==='USD'?'active':''}" onclick="App.state.settings.currency='USD'; App.saveState(); App.render();">USD ($)</button>
+                                    <button class="seg-btn ${App.state.settings.currency==='INR'?'active':''}" onclick="App.state.settings.currency='INR'; App.saveState(); App.render();">INR (₹)</button>
+                                </div>
+                            </div>
+                            <div class="settings-row">
+                                <div class="settings-info">
+                                    <div class="settings-label">Font Size: ${App.state.settings.fontSize}px</div>
+                                    <div class="settings-desc">Adjust the base font size of the interface.</div>
+                                </div>
+                                <input type="range" min="12" max="20" value="${App.state.settings.fontSize}" style="width: 200px;" oninput="App.state.settings.fontSize = this.value; App.applyTheme(); App.saveState(); this.parentElement.querySelector('.settings-label').innerText = 'Font Size: ' + this.value + 'px';">
+                            </div>
+                        </div>
+
+                        <div class="settings-card">
+                            <div class="settings-section-title">Data Management</div>
+                            <div class="settings-row">
+                                <div class="settings-info">
+                                    <div class="settings-label">Export Workspace</div>
+                                    <div class="settings-desc">Download a complete backup of all your notes and clients.</div>
+                                </div>
+                                <button class="btn" onclick="Utils.downloadFile('nexus_backup.json', JSON.stringify(App.state), 'application/json')">
+                                    <svg class="icon" style="width:16px;height:16px;"><use href="#i-download"></use></svg> Export JSON
+                                </button>
+                            </div>
+                            <div class="settings-row">
+                                <div class="settings-info">
+                                    <div class="settings-label">Reset Application</div>
+                                    <div class="settings-desc">Permanently delete all data and start fresh. This cannot be undone.</div>
+                                </div>
+                                <button class="btn" style="color: #ef4444; border-color: #ef4444;" onclick="if(confirm('Delete ALL data?')) { indexedDB.deleteDatabase('NexusNotesDB'); location.reload(); }">Reset Data</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            },
+
+            renderFocusCard() {
+                const note = App.state.notes.find(n => n.id === App.focusedNoteId);
+                if (!note) return App.closeModal();
+                
+                document.querySelectorAll('.nx-calendar.active').forEach(m => m.remove());
+
+                const card = document.getElementById('focusCard');
+                const isEmpty = !note.title && !note.content && note.type === 'standard' && !note.isChecklist;
+                card.className = `focus-card ${isEmpty ? 'empty' : ''}`;
+                
+                let specificFields = '';
+                let contentArea = '';
+
+                if (note.type === 'kanban') {
+                    const currSymbol = App.state.settings.currency === 'INR' ? '₹' : '$';
+                    const client = App.state.clients.find(c=>c.id===note.clientId);
+                    const clientName = client?.name || '';
+                    const isMonthly = client?.paymentType === 'monthly';
+                    
+                    specificFields = `
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                            <div class="nx-dropdown" id="kStatusDd">
+                                <div class="nx-dropdown-trigger" onclick="ViewRenderer.toggleDropdown('kStatusMenu', this)">
+                                    <span>${note.status || 'Pending'}</span>
+                                    <svg class="icon" style="width:14px;height:14px;"><use href="#i-chevron"></use></svg>
+                                </div>
+                            </div>
+                            <div class="input-group">
+                                <input class="input-modern" list="clientList" placeholder="Select or type new client" value="${clientName}" onchange="App.handleClientInput('${note.id}', this.value)">
+                                <datalist id="clientList">
+                                    ${App.state.clients.map(c => `<option value="${c.name}">`).join('')}
+                                </datalist>
+                            </div>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+                            <div class="input-group">
+                                <span class="input-icon"><svg class="icon" style="width:14px;height:14px;"><use href="#i-video"></use></svg></span>
+                                <input type="number" class="input-modern input-with-icon" placeholder="Videos" value="${note.videos || 0}" oninput="App.updateNote('${note.id}', 'videos', parseInt(this.value)||0)">
+                            </div>
+                            <div class="input-group">
+                                <span class="input-icon">${currSymbol}</span>
+                                <input type="number" class="input-modern input-with-icon" placeholder="Price" value="${note.price || 0}" oninput="App.updateNote('${note.id}', 'price', parseFloat(this.value)||0)" ${isMonthly ? 'disabled title="Client is on monthly salary"' : ''}>
+                            </div>
+                            <div class="nx-dropdown" id="kPricingDd">
+                                <div class="nx-dropdown-trigger" onclick="ViewRenderer.toggleDropdown('kPricingMenu', this)" style="${isMonthly ? 'opacity:0.5; pointer-events:none;' : ''}">
+                                    <span>${note.pricingType === 'per_video' ? 'Per Video' : 'Total'}</span>
+                                    <svg class="icon" style="width:14px;height:14px;"><use href="#i-chevron"></use></svg>
+                                </div>
+                            </div>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                            <div style="position:relative;">
+                                <button class="btn" style="width:100%; justify-content:flex-start;" data-cal-trigger onclick="ViewRenderer.toggleNoteCalendar(event, '${note.id}', 'receivedDate')">
+                                    <svg class="icon" style="width:14px;height:14px;margin-right:5px;"><use href="#i-calendar"></use></svg>
+                                    Received: ${Utils.formatDate(note.receivedDate)}
+                                </button>
+                            </div>
+                            <div style="position:relative;">
+                                <button class="btn" style="width:100%; justify-content:flex-start;" data-cal-trigger onclick="${note.status === 'Completed' ? `ViewRenderer.toggleNoteCalendar(event, '${note.id}', 'completedDate')` : 'Utils.showToast(\'Mark task as Completed to set date\')'}" ${note.status !== 'Completed' ? 'disabled' : ''}>
+                                    <svg class="icon" style="width:14px;height:14px;margin-right:5px;"><use href="#i-calendar"></use></svg>
+                                    Completed: ${Utils.formatDate(note.completedDate)}
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    
+                    setTimeout(() => {
+                        if (document.getElementById('kStatusDd')) {
+                            document.getElementById('kStatusDd').insertAdjacentHTML('beforeend', `
+                                <div class="nx-dropdown-menu" id="kStatusMenu">
+                                    ${['Pending', 'In Progress', 'Revision', 'Completed'].map(s => `<div class="nx-dropdown-item" onclick="App.updateNote('${note.id}', 'status', '${s}'); ViewRenderer.renderFocusCard();">${s}</div>`).join('')}
+                                </div>
+                            `);
+                            document.getElementById('kPricingDd').insertAdjacentHTML('beforeend', `
+                                <div class="nx-dropdown-menu" id="kPricingMenu">
+                                    <div class="nx-dropdown-item" onclick="App.updateNote('${note.id}', 'pricingType', 'total'); ViewRenderer.renderFocusCard();">Total</div>
+                                    <div class="nx-dropdown-item" onclick="App.updateNote('${note.id}', 'pricingType', 'per_video'); ViewRenderer.renderFocusCard();">Per Video</div>
+                                </div>
+                            `);
+                        }
+                    }, 0);
+
+                    contentArea = `<div class="editor-content" contenteditable="true" oninput="App.updateNote('${note.id}', 'content', this.innerHTML)" style="color: var(--text);">${note.content || ''}</div>`;
+
+                } else if (note.type === 'standard' && note.isChecklist) {
+                    contentArea = `
+                        <div style="margin-top: 10px;">
+                            ${note.items.map((item, i) => `
+                                <div class="checklist-item">
+                                    <input type="checkbox" class="nx-checkbox" ${item.done ? 'checked' : ''} onchange="App.toggleChecklistItem('${note.id}', ${i}, this.checked)">
+                                    <input class="checklist-text ${item.done ? 'done' : ''}" value="${Utils.escapeHtml(item.text)}" oninput="App.updateChecklistItem('${note.id}', ${i}, this.value)" placeholder="List item">
+                                    <button class="icon-btn" style="color:#ef4444;" onclick="App.deleteChecklistItem('${note.id}', ${i})"><svg class="icon" style="width:16px;height:16px;"><use href="#i-trash"></use></svg></button>
+                                </div>
+                            `).join('')}
+                            <button class="btn" onclick="App.addChecklistItem('${note.id}')" style="margin-top: 8px;">+ Add Item</button>
+                        </div>
+                    `;
+                } else if (note.type === 'prompt') {
+                    const categories = ['ChatGPT', 'Claude', 'Gemini', 'Midjourney', 'Programming', 'Writing', 'Custom'];
+                    specificFields = `
+                        <input class="input-modern" list="promptCats" placeholder="Category" value="${note.category || ''}" oninput="App.updateNote('${note.id}', 'category', this.value)">
+                        <datalist id="promptCats">${categories.map(c => `<option value="${c}">`).join('')}</datalist>
+                    `;
+                    contentArea = `<div class="editor-content" contenteditable="true" oninput="App.updateNote('${note.id}', 'content', this.innerHTML)" style="color: var(--text);">${note.content || ''}</div>`;
+                } else if (note.type === 'brand') {
+                    specificFields = `
+                        <div id="brandColors">
+                            ${note.colors.map((c, i) => `
+                                <div style="display:flex; gap:8px; margin-bottom:8px; align-items:center;">
+                                    <input type="color" value="${c}" oninput="App.state.notes.find(n=>n.id==='${note.id}').colors[${i}] = this.value; App.saveState(); this.nextElementSibling.value = this.value;" style="width:40px; height:35px; border:none; background:none; cursor:pointer;">
+                                    <input type="text" class="input-modern" value="${c}" oninput="App.state.notes.find(n=>n.id==='${note.id}').colors[${i}] = this.value; App.saveState(); this.previousElementSibling.value = this.value;" style="flex:1;">
+                                    <button class="icon-btn" onclick="App.state.notes.find(n=>n.id==='${note.id}').colors.splice(${i},1); App.saveState(); ViewRenderer.renderFocusCard();"><svg class="icon"><use href="#i-trash"></use></svg></button>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <button class="btn" onclick="App.state.notes.find(n=>n.id==='${note.id}').colors.push('#000000'); App.saveState(); ViewRenderer.renderFocusCard();">+ Add Color</button>
+                        
+                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:10px;">
+                            <input class="input-modern" placeholder="Heading Font" value="${note.headingFont || ''}" oninput="App.updateNote('${note.id}', 'headingFont', this.value)">
+                            <input class="input-modern" placeholder="Body Font" value="${note.bodyFont || ''}" oninput="App.updateNote('${note.id}', 'bodyFont', this.value)">
+                        </div>
+                    `;
+                    contentArea = `<div class="editor-content" contenteditable="true" oninput="App.updateNote('${note.id}', 'content', this.innerHTML)" style="color: var(--text);">${note.content || ''}</div>`;
+                } else {
+                    contentArea = `<div class="editor-content" contenteditable="true" oninput="App.updateNote('${note.id}', 'content', this.innerHTML)" style="color: var(--text);">${note.content || ''}</div>`;
+                }
+
+                const bgColorClass = note.bgColor !== 'default' ? `var(--note-c-${note.bgColor})` : 'var(--note-c-default)';
+                const textColor = Utils.getContrastColor(note.bgColor);
+
+                card.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <input class="editor-title" placeholder="Title" value="${Utils.escapeHtml(note.title)}" oninput="App.updateNote('${note.id}', 'title', this.value)" style="color: ${textColor};">
+                        <div style="display:flex; gap:4px;">
+                            <button class="icon-btn" onclick="App.togglePin('${note.id}')" title="Pin" style="color: ${textColor};"><svg class="icon" style="${note.pinned ? 'fill:currentColor' : ''}"><use href="#i-pin"></use></svg></button>
+                            <button class="icon-btn" onclick="App.closeModal()" title="Close" style="color: ${textColor};"><svg class="icon"><use href="#i-close"></use></svg></button>
+                        </div>
+                    </div>
+                    ${specificFields}
+                    ${contentArea}
+                    <div class="editor-toolbar" style="border-color: rgba(128,128,128,0.3);">
+                        <div class="toolbar-group">
+                            ${note.type === 'standard' && !note.isChecklist ? `
+                            <button class="icon-btn" style="color: ${textColor};" onclick="App.toggleColorPalette()" title="Background"><svg class="icon"><use href="#i-palette"></use></svg></button>
+                            <button class="icon-btn" style="color: ${textColor};" onclick="App.toggleFormatOptions()" title="Format"><svg class="icon"><use href="#i-bold"></use></svg></button>
+                            ` : ''}
+                            ${note.type !== 'kanban' ? `<button class="icon-btn" style="color: ${textColor};" onclick="App.archiveNote('${note.id}')" title="Archive"><svg class="icon"><use href="#i-archive"></use></svg></button>` : ''}
+                        </div>
+                        <div class="toolbar-group">
+                            <button class="btn" style="color:#ef4444; border-color: rgba(128,128,128,0.3);" onclick="App.deleteNote('${note.id}')">Delete</button>
+                        </div>
+                    </div>
+                    ${note.type === 'standard' && !note.isChecklist ? `
+                    <div class="color-palette-popup" id="colorPalette">
+                        ${['default', 'yellow', 'blue', 'pink', 'green', 'orange'].map(c => `
+                            <div class="color-dot" style="background: var(--note-c-${c}); border: 1px solid var(--border);" onclick="App.changeBgColor('${note.id}', '${c}')"></div>
+                        `).join('')}
+                    </div>
+                    <div class="color-palette-popup" id="formatOptions" style="right: 60px; grid-template-columns: 1fr;">
+                        <button class="icon-btn" onclick="document.execCommand('bold')"><svg class="icon"><use href="#i-bold"></use></svg></button>
+                        <button class="icon-btn" onclick="document.execCommand('italic')"><svg class="icon"><use href="#i-italic"></use></svg></button>
+                    </div>
+                    ` : ''}
+                `;
+                
+                if (note.type === 'standard') {
+                    card.style.background = bgColorClass;
+                    card.style.color = textColor;
+                } else {
+                    card.style.background = 'var(--bg-tertiary)';
+                    card.style.color = 'var(--text)';
+                }
+            },
+
+            manageClientsModal() {
+                const currSymbol = App.state.settings.currency === 'INR' ? '₹' : '$';
+                App.openCustomModal(`
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                        <h3>Manage Clients</h3>
+                        <button class="icon-btn" onclick="App.closeModal()"><svg class="icon"><use href="#i-close"></use></svg></button>
+                    </div>
+                    <div id="clientList" style="display:flex; flex-direction:column; gap:16px;">
+                        ${App.state.clients.map(c => `
+                            <div style="display:flex; flex-direction:column; gap:8px; background:var(--bg-secondary); padding:12px; border-radius:8px; border-left: 4px solid ${c.color};">
+                                <input class="input-modern" placeholder="Client Name" value="${c.name}" oninput="App.state.clients.find(cl=>cl.id==='${c.id}').name = this.value; App.saveState();">
+                                <div style="display:flex; gap:8px; align-items:center;">
+                                    <input type="color" value="${c.color}" oninput="App.state.clients.find(cl=>cl.id==='${c.id}').color = this.value; App.saveState();" style="width:40px; height:35px; border:none; background:none; cursor:pointer;">
+                                    <input class="input-modern" placeholder="Company (Optional)" value="${c.company || ''}" oninput="App.state.clients.find(cl=>cl.id==='${c.id}').company = this.value; App.saveState();" style="flex:1;">
+                                </div>
+                                <div style="display:flex; gap:8px; align-items:center;">
+                                    <input class="input-modern" placeholder="Email (Optional)" value="${c.email || ''}" oninput="App.state.clients.find(cl=>cl.id==='${c.id}').email = this.value; App.saveState();" style="flex:1;">
+                                </div>
+                                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
+                                    <select class="input-modern" onchange="App.state.clients.find(cl=>cl.id==='${c.id}').paymentType = this.value; App.saveState(); ViewRenderer.manageClientsModal();">
+                                        <option value="per_video" ${c.paymentType !== 'monthly' ? 'selected' : ''}>Per Video / Project</option>
+                                        <option value="monthly" ${c.paymentType === 'monthly' ? 'selected' : ''}>Monthly Salary</option>
+                                    </select>
+                                    ${c.paymentType === 'monthly' ? `
+                                        <div class="input-group">
+                                            <span class="input-icon">${currSymbol}</span>
+                                            <input type="number" class="input-modern input-with-icon" placeholder="Monthly Salary" value="${c.monthlySalary || 0}" oninput="App.state.clients.find(cl=>cl.id==='${c.id}').monthlySalary = parseFloat(this.value)||0; App.saveState();">
+                                        </div>
+                                    ` : `<div></div>`}
+                                </div>
+                                <button class="btn" style="color:#ef4444; margin-top:4px;" onclick="App.state.clients = App.state.clients.filter(cl => cl.id !== '${c.id}'); App.saveState(); ViewRenderer.manageClientsModal();">Delete Client</button>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <button class="btn btn-primary" onclick="App.state.clients.push({id: Utils.uid(), name: 'New Client', color: '#6366f1', company: '', email: '', paymentType: 'per_video', monthlySalary: 0}); App.saveState(); ViewRenderer.manageClientsModal();">+ Add Client Manually</button>
+                `);
+            },
+
+            toggleDropdown(id, trigger) {
+                const menu = document.getElementById(id);
+                const isOpen = menu.classList.contains('active');
+                document.querySelectorAll('.nx-dropdown-menu.active').forEach(m => m.classList.remove('active'));
+                if (!isOpen) menu.classList.add('active');
+            },
+
+            toggleNoteCalendar(e, noteId, key) {
+                e.stopPropagation();
+                const existing = document.getElementById('floatingCal');
+                if (existing) { existing.remove(); return; }
+                
+                const rect = e.target.closest('button').getBoundingClientRect();
+                const cal = document.createElement('div');
+                cal.className = 'nx-calendar active'; 
+                cal.id = 'floatingCal';
+                cal.style.top = (rect.bottom + 5) + 'px';
+                cal.style.left = rect.left + 'px';
+                document.body.appendChild(cal);
+                
+                this.renderNoteCalendar(cal, noteId, key);
+            },
+
+            renderNoteCalendar(container, noteId, key) {
+                const note = App.state.notes.find(n => n.id === noteId);
+                const currentDate = note[key] ? new Date(note[key]) : new Date();
+                const year = currentDate.getFullYear();
+                const month = currentDate.getMonth();
+                
+                const firstDay = new Date(year, month, 1).getDay();
+                const daysInMonth = new Date(year, month + 1, 0).getDate();
+                const monthName = currentDate.toLocaleString('default', { month: 'long' });
+
+                let html = `<div class="cal-header"><div><strong>${monthName} ${year}</strong></div></div><div class="cal-grid">`;
+                ['S','M','T','W','T','F','S'].forEach(d => html += `<div style="font-weight:bold; font-size:0.7rem; color:var(--text-secondary);">${d}</div>`);
+                for(let i=0; i<firstDay; i++) html += `<div class="cal-day faded"></div>`;
+                for(let i=1; i<=daysInMonth; i++) {
+                    const ts = new Date(year, month, i).getTime();
+                    const selected = note[key] && new Date(note[key]).toDateString() === new Date(year, month, i).toDateString() ? 'selected' : '';
+                    html += `<div class="cal-day ${selected}" onclick="App.updateNote('${noteId}', '${key}', ${ts}); document.getElementById('floatingCal').remove(); ViewRenderer.renderFocusCard();">${i}</div>`;
+                }
+                html += `</div>`;
+                container.innerHTML = html;
+            },
+
+            toggleFilterCalendar(e, key) {
+                e.stopPropagation();
+                const existing = document.getElementById('floatingCal');
+                if (existing) { existing.remove(); return; }
+                
+                const rect = e.target.closest('button').getBoundingClientRect();
+                const cal = document.createElement('div');
+                cal.className = 'nx-calendar active'; 
+                cal.id = 'floatingCal';
+                cal.style.top = (rect.bottom + 5) + 'px';
+                cal.style.left = rect.left + 'px';
+                document.body.appendChild(cal);
+                
+                this.renderFilterCalendar(cal, key);
+            },
+
+            renderFilterCalendar(container, key) {
+                const currentDate = App.dbFilters[key] ? new Date(App.dbFilters[key]) : new Date();
+                const year = currentDate.getFullYear();
+                const month = currentDate.getMonth();
+                
+                const firstDay = new Date(year, month, 1).getDay();
+                const daysInMonth = new Date(year, month + 1, 0).getDate();
+                const monthName = currentDate.toLocaleString('default', { month: 'long' });
+
+                let html = `<div class="cal-header"><div><strong>${monthName} ${year}</strong></div></div><div class="cal-grid">`;
+                ['S','M','T','W','T','F','S'].forEach(d => html += `<div style="font-weight:bold; font-size:0.7rem; color:var(--text-secondary);">${d}</div>`);
+                for(let i=0; i<firstDay; i++) html += `<div class="cal-day faded"></div>`;
+                for(let i=1; i<=daysInMonth; i++) {
+                    const ts = new Date(year, month, i).getTime();
+                    const selected = App.dbFilters[key] && new Date(App.dbFilters[key]).toDateString() === new Date(year, month, i).toDateString() ? 'selected' : '';
+                    html += `<div class="cal-day ${selected}" onclick="App.dbFilters['${key}'] = ${ts}; App.dbFilters['use${key.charAt(0).toUpperCase() + key.slice(1)}'] = true; document.getElementById('floatingCal').remove(); App.render();">${i}</div>`;
+                }
+                html += `</div>`;
+                container.innerHTML = html;
+            },
+
+            filterNotes(type) {
+                let notes = App.state.notes.filter(n => n.type === type && !n.archived);
+                if (App.searchQuery) {
+                    notes = notes.filter(n => 
+                        (n.title || '').toLowerCase().includes(App.searchQuery) ||
+                        (n.content || '').toLowerCase().includes(App.searchQuery)
+                    );
+                }
+                return notes.sort((a,b) => (b.pinned?1:0) - (a.pinned?1:0));
+            },
+
+            exportCSV() {
+                const tasks = App.state.notes.filter(n => n.type === 'kanban' && !n.archived);
+                const headers = ['Client', 'Project', 'Status', 'Videos', 'Total Amount', 'Received Date', 'Completed Date'];
+                const rows = tasks.map(t => {
+                    const c = App.state.clients.find(cl => cl.id === t.clientId);
+                    return [
+                        c ? c.name : 'N/A', 
+                        Utils.escapeHtml(t.title), 
+                        t.status, 
+                        t.videos || 0, 
+                        App.calculateTaskRevenue(t), 
+                        Utils.formatDate(t.receivedDate), 
+                        Utils.formatDate(t.completedDate)
+                    ].join(',');
+                });
+                return [headers.join(','), ...rows].join('\n');
+            },
+
+            attachDragAndDrop() {
+                let dragged = null;
+                document.querySelectorAll('.notes-grid .card').forEach(card => {
+                    card.addEventListener('dragstart', (e) => { dragged = card; setTimeout(() => card.classList.add('dragging'), 0); });
+                    card.addEventListener('dragend', (e) => { card.classList.remove('dragging'); this.reorderNotes(); });
+                    card.addEventListener('dragover', (e) => {
+                        e.preventDefault();
+                        const afterElement = [...document.querySelectorAll('.notes-grid .card:not(.dragging)')].find(el => {
+                            return e.clientY < el.getBoundingClientRect().top + el.offsetHeight / 2;
+                        });
+                        if (afterElement == null) document.querySelector('.notes-grid').appendChild(dragged);
+                        else document.querySelector('.notes-grid').insertBefore(dragged, afterElement);
+                    });
+                });
+            },
+
+            attachKanbanDnD() {
+                let dragged = null;
+                document.querySelectorAll('.kanban-card').forEach(card => {
+                    card.addEventListener('dragstart', (e) => { dragged = card; setTimeout(() => card.classList.add('dragging'), 0); });
+                    card.addEventListener('dragend', (e) => { 
+                        card.classList.remove('dragging'); 
+                        this.updateKanbanOrder();
+                        App.render(); 
+                    });
+                });
+                document.querySelectorAll('.kanban-cards').forEach(col => {
+                    col.addEventListener('dragover', (e) => {
+                        e.preventDefault();
+                        const afterElement = [...col.querySelectorAll('.kanban-card:not(.dragging)')].find(el => {
+                            return e.clientY < el.getBoundingClientRect().top + el.offsetHeight / 2;
+                        });
+                        if (afterElement == null) col.appendChild(dragged);
+                        else col.insertBefore(dragged, afterElement);
+                    });
+                    col.addEventListener('drop', (e) => {
+                        const noteId = dragged.dataset.id;
+                        const newStatus = col.dataset.status;
+                        App.updateNote(noteId, 'status', newStatus);
+                        const note = App.state.notes.find(n => n.id === noteId);
+                        if (newStatus === 'Completed' && note && !note.completedDate) {
+                            note.completedDate = Date.now();
+                        }
+                        if (newStatus !== 'Completed' && note) {
+                            note.completedDate = null; // Reset when moved out of completed
+                        }
+                    });
+                });
+            },
+
+            reorderNotes() {
+                const grid = document.querySelector('.notes-grid');
+                if (!grid) return;
+                const newOrder = [...grid.children].map(c => c.dataset.id);
+                App.state.notes.sort((a, b) => {
+                    let aI = newOrder.indexOf(a.id);
+                    let bI = newOrder.indexOf(b.id);
+                    if (aI === -1) aI = 999; if (bI === -1) bI = 999;
+                    return aI - bI;
+                });
+                App.saveState();
+            },
+
+            updateKanbanOrder() {
+                document.querySelectorAll('.kanban-cards').forEach(col => {
+                    const status = col.dataset.status;
+                    [...col.children].forEach((card, index) => {
+                        const note = App.state.notes.find(n => n.id === card.dataset.id);
+                        if (note) { note.order = index; note.status = status; }
+                    });
+                });
+                App.saveState();
+            }
+        };
+
+        App.updateNote = function(id, key, value) {
+            const note = this.state.notes.find(n => n.id === id);
+            if (note) { 
+                note[key] = value; 
+                this.saveState(); 
+            }
+        };
+
+        App.togglePin = function(id) {
+            const note = this.state.notes.find(n => n.id === id);
+            if (note) { 
+                note.pinned = !note.pinned; 
+                this.saveState(); 
+                Utils.logActivity(`${note.pinned ? 'Pinned' : 'Unpinned'}: ${note.title || 'Untitled'}`);
+                if(this.focusedNoteId === id) ViewRenderer.renderFocusCard(); 
+                else this.render(); 
+            }
+        };
+
+        App.deleteNote = function(id) {
+            const note = this.state.notes.find(n => n.id === id);
+            if (note) {
+                this.state.notes = this.state.notes.filter(n => n.id !== id);
+                this.undoStack.push({ type: 'delete', note: JSON.parse(JSON.stringify(note)) });
+                this.saveState();
+                Utils.logActivity(`Deleted: ${note.title || 'Untitled'}`);
+                this.closeModal();
+                Utils.showToast('Note deleted', () => App.undoDelete());
+            }
+        };
+
+        App.toggleKanbanComplete = function(id) {
+            const note = this.state.notes.find(n => n.id === id);
+            if (note) {
+                note.status = note.status === 'Completed' ? 'Pending' : 'Completed';
+                if (note.status === 'Completed' && !note.completedDate) note.completedDate = Date.now();
+                if (note.status !== 'Completed') note.completedDate = null; 
+                this.saveState();
+                Utils.logActivity(`Marked ${note.title} as ${note.status}`);
+                this.render();
+            }
+        };
+
+        App.toggleColorPalette = function() {
+            document.getElementById('colorPalette').classList.toggle('active');
+            document.getElementById('formatOptions').classList.remove('active');
+        };
+
+        App.toggleFormatOptions = function() {
+            document.getElementById('formatOptions').classList.toggle('active');
+            document.getElementById('colorPalette').classList.remove('active');
+        };
+
+        App.changeBgColor = function(id, color) {
+            this.updateNote(id, 'bgColor', color);
+            ViewRenderer.renderFocusCard();
+        };
+
+        App.archiveNote = function(id) {
+            const note = this.state.notes.find(n => n.id === id);
+            if (note) { 
+                note.archived = true; 
+                this.saveState(); 
+                Utils.logActivity(`Archived: ${note.title || 'Untitled'}`);
+                this.closeModal(); 
+            }
+        };
+
+        Utils.copyToClipboard = function(id) {
+            const note = App.state.notes.find(n => n.id === id);
+            if (note) {
+                navigator.clipboard.writeText(note.content);
+                Utils.showToast('Prompt copied!');
+                Utils.logActivity(`Copied prompt: ${note.title}`);
+            }
+        };
+
+        App.init();
+    </script>
+</body>
+</html>
