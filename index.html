@@ -823,7 +823,8 @@ ${body}
                     settings: { theme: 'saas', mode: 'dark', fontSize: 15, currency: 'USD', ownerName: '' },
                     lastModified: 0,
                     dashboardFilter: 'all_time',
-                    sharedWorkspaces: []
+                    sharedWorkspaces: [],
+                    mySharedIds: []
                 },
                 activeCollab: null,
                 collabSubView: 'dashboard',
@@ -841,6 +842,7 @@ ${body}
                     if (savedState) {
                         this.state = { ...this.state, ...savedState };
                         if (!this.state.sharedWorkspaces) this.state.sharedWorkspaces = [];
+                        if (!this.state.mySharedIds) this.state.mySharedIds = [];
                         if (!this.state.settings.ownerName) this.state.settings.ownerName = '';
                     }
                     this.applyTheme();
@@ -893,7 +895,14 @@ ${body}
                 saveState() {
                     this.state.lastModified = Date.now();
                     DB.set('appState', this.state);
-                    if (GDrive.isSignedIn) Utils.debounce(() => GDrive.sync(), 2000)(); // Auto-sync if online
+                    if (GDrive.isSignedIn) Utils.debounce(() => GDrive.sync(), 2000)();
+                    // Push owner's latest data to any open manager/viewer tabs
+                    if (!this._suppressBroadcast && App._collabChannel && (this.state.mySharedIds||[]).length) {
+                        const payload = { notes: this.state.notes, clients: this.state.clients, settings: { currency: this.state.settings.currency } };
+                        this.state.mySharedIds.forEach(shareId => {
+                            App._collabChannel.postMessage({ type: 'owner-update', shareId, data: payload });
+                        });
+                    }
                 },
     
                 setSyncStatus(status) {
@@ -2249,6 +2258,11 @@ ${body}
     
             App.generateShareLink = function(role, ownerName) {
                 const shareId = Utils.uid();
+                // Remember that we are the owner of this shareId so we can
+                // receive manager edits and push our own changes to the manager tab
+                if (!this.state.mySharedIds) this.state.mySharedIds = [];
+                if (!this.state.mySharedIds.includes(shareId)) this.state.mySharedIds.push(shareId);
+                this.saveState();
                 const shareData = {
                     version: 1, shareId,
                     sharedBy: ownerName || this.state.settings.ownerName || 'Nexus Workspace',
@@ -2680,13 +2694,49 @@ ${body}
             App._collabChannel = (typeof BroadcastChannel !== 'undefined') ? new BroadcastChannel('nexus-collab-sync') : null;
             if (App._collabChannel) {
                 App._collabChannel.onmessage = (e) => {
-                    if (e.data.type !== 'collab-update') return;
-                    const idx = (App.state.sharedWorkspaces||[]).findIndex(w => w.shareId === e.data.shareId);
-                    if (idx < 0) return;
-                    App.state.sharedWorkspaces[idx].data = e.data.data;
-                    App.saveState();
-                    if (App.activeCollab === e.data.shareId) App.render();
-                    else Utils.showToast('Collab workspace updated by manager.');
+                    const { type, shareId, data } = e.data;
+
+                    if (type === 'collab-update') {
+                        // Manager edited something — apply to owner's real state
+                        if ((App.state.mySharedIds||[]).includes(shareId)) {
+                            App._suppressBroadcast = true;
+                            // Merge tasks: replace matching ones, add new ones, keep unrelated
+                            const incoming = data.notes || [];
+                            const incomingIds = new Set(incoming.map(n => n.id));
+                            const kept = (App.state.notes||[]).filter(n => !incomingIds.has(n.id));
+                            App.state.notes = [...incoming, ...kept.filter(n => !incoming.find(i => i.id === n.id))];
+                            // Merge clients similarly
+                            const incomingClients = data.clients || [];
+                            const incomingCIds = new Set(incomingClients.map(cl => cl.id));
+                            const keptClients = (App.state.clients||[]).filter(cl => !incomingCIds.has(cl.id));
+                            App.state.clients = [...incomingClients, ...keptClients];
+                            App.saveState();
+                            App._suppressBroadcast = false;
+                            if (!App.activeCollab) App.render();
+                            else Utils.showToast('Workspace updated by collaborator.');
+                        }
+                        // Manager's snapshot in their own sharedWorkspaces (shouldn't normally happen but handle gracefully)
+                        const wsIdx = (App.state.sharedWorkspaces||[]).findIndex(w => w.shareId === shareId);
+                        if (wsIdx >= 0) {
+                            App.state.sharedWorkspaces[wsIdx].data = data;
+                            App._suppressBroadcast = true;
+                            App.saveState();
+                            App._suppressBroadcast = false;
+                            if (App.activeCollab === shareId) App.render();
+                        }
+                    }
+
+                    if (type === 'owner-update') {
+                        // Owner changed their state — update this tab's collab snapshot
+                        const wsIdx = (App.state.sharedWorkspaces||[]).findIndex(w => w.shareId === shareId);
+                        if (wsIdx < 0) return;
+                        App.state.sharedWorkspaces[wsIdx].data = data;
+                        App._suppressBroadcast = true;
+                        App.saveState();
+                        App._suppressBroadcast = false;
+                        if (App.activeCollab === shareId) App.render();
+                        else Utils.showToast('Workspace updated by owner.');
+                    }
                 };
             }
             App._broadcastCollab = function(shareId) {
