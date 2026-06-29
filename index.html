@@ -666,9 +666,15 @@
                         client_id: this.CLIENT_ID,
                         scope: this.SCOPES,
                         callback: (resp) => {
-                            if (resp.error) return;
+                            if (resp.error) {
+                                const msg = resp.error_description || resp.error;
+                                Utils.showToast('Google sign-in failed: ' + msg);
+                                console.error('GIS error:', resp);
+                                return;
+                            }
                             this.isSignedIn = true;
-                            App.updateAuthUI('signedin'); this.sync();
+                            App.updateAuthUI('signedin');
+                            this.sync();
                         }
                     });
                     this.gisInited = true;
@@ -695,6 +701,10 @@
     
                 async sync() {
                     if (!this.isSignedIn) return;
+                    if (!gapi.client.drive) {
+                        Utils.showToast('Drive API not ready yet, please try again.');
+                        return;
+                    }
                     App.setSyncStatus('syncing');
                     try {
                         let file = await this.findFile();
@@ -759,7 +769,8 @@ ${body}
                     } catch (err) {
                         console.error('Sync Error:', err);
                         App.setSyncStatus('offline');
-                        Utils.showToast('Sync failed. Check console.');
+                        const detail = (err && (err.result?.error?.message || err.message || JSON.stringify(err))) || 'Unknown error';
+                        Utils.showToast('Sync failed: ' + detail.substring(0, 80));
                     }
                 },
                 
