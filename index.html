@@ -898,16 +898,47 @@ ${body}
     
                 async init() {
                     await DB.init();
-                    const savedState = await DB.get('appState');
-                    if (savedState) {
-                        this.state = { ...this.state, ...savedState };
-                        if (!this.state.sharedWorkspaces) this.state.sharedWorkspaces = [];
-                        if (!this.state.mySharedIds) this.state.mySharedIds = [];
-                        if (!this.state.settings.ownerName) this.state.settings.ownerName = '';
+
+                    // ?reset in URL clears all saved state so a corrupted app can recover
+                    if (new URLSearchParams(location.search).has('reset')) {
+                        await DB.set('appState', null);
+                        localStorage.removeItem('nexus_gdrive_token');
+                        history.replaceState(null, '', location.pathname);
+                        Utils.showToast('App data cleared — fresh start!');
                     }
+
+                    let savedState = null;
+                    try { savedState = await DB.get('appState'); } catch(e) { console.warn('State load failed, starting fresh.', e); }
+
+                    if (savedState) {
+                        try {
+                            this.state = { ...this.state, ...savedState };
+                            if (!this.state.sharedWorkspaces) this.state.sharedWorkspaces = [];
+                            if (!this.state.mySharedIds)      this.state.mySharedIds = [];
+                            if (!this.state.settings)         this.state.settings = {};
+                            if (!this.state.settings.ownerName) this.state.settings.ownerName = '';
+                            // Strip corrupted collab entries (old URL-hash era had no fileId)
+                            this.state.sharedWorkspaces = this.state.sharedWorkspaces.filter(ws =>
+                                ws && ws.fileId && typeof ws.fileId === 'string' && ws.data
+                            );
+                            // Exit any stale collab mode saved from last session
+                            this.activeCollab = null;
+                        } catch(e) {
+                            console.error('Corrupt saved state — resetting.', e);
+                            this.state = { notes:[], clients:[], settings:{theme:'saas',mode:'dark',fontSize:15,currency:'USD',ownerName:''}, lastModified:0, dashboardFilter:'all_time', sharedWorkspaces:[], mySharedIds:[] };
+                        }
+                    }
+
                     this.applyTheme();
                     this.bindEvents();
-                    this.render();
+                    try {
+                        this.render();
+                    } catch(e) {
+                        console.error('Render failed — forcing safe view.', e);
+                        this.activeCollab = null;
+                        this.currentView = 'dashboard';
+                        try { this.render(); } catch(_) {}
+                    }
                     this.renderCollabSidebar();
                     GDrive.init();
                     Utils.logActivity('Application Initialized');
@@ -986,22 +1017,38 @@ ${body}
                     const main = document.getElementById('mainContent');
                     main.innerHTML = '';
                     ViewRenderer.clearPopups();
-                    
-                    if (this.activeCollab) {
-                        ViewRenderer.renderCollabWorkspace(main);
-                    } else {
-                    switch(this.currentView) {
-                        case 'dashboard': ViewRenderer.renderDashboard(main); break;
-                        case 'standard': ViewRenderer.renderNotes(main); break;
-                        case 'archive': ViewRenderer.renderArchive(main); break;
-                        case 'kanban': ViewRenderer.renderKanban(main); break;
-                        case 'database': ViewRenderer.renderDatabase(main); break;
-                        case 'prompt': ViewRenderer.renderPrompts(main); break;
-                        case 'brand': ViewRenderer.renderBrands(main); break;
-                        case 'settings': ViewRenderer.renderSettings(main); break;
+                    try {
+                        if (this.activeCollab) {
+                            ViewRenderer.renderCollabWorkspace(main);
+                        } else {
+                            switch(this.currentView) {
+                                case 'dashboard': ViewRenderer.renderDashboard(main); break;
+                                case 'standard':  ViewRenderer.renderNotes(main); break;
+                                case 'archive':   ViewRenderer.renderArchive(main); break;
+                                case 'kanban':    ViewRenderer.renderKanban(main); break;
+                                case 'database':  ViewRenderer.renderDatabase(main); break;
+                                case 'prompt':    ViewRenderer.renderPrompts(main); break;
+                                case 'brand':     ViewRenderer.renderBrands(main); break;
+                                case 'settings':  ViewRenderer.renderSettings(main); break;
+                            }
+                        }
+                        ViewRenderer.attachDragAndDrop();
+                    } catch(err) {
+                        console.error('Render error:', err);
+                        // If collab view crashed, bail out of that workspace silently
+                        if (this.activeCollab) {
+                            this.activeCollab = null;
+                            this.currentView = 'dashboard';
+                            try { ViewRenderer.renderDashboard(main); ViewRenderer.attachDragAndDrop(); } catch(_) {}
+                            Utils.showToast('Workspace view failed — returned to dashboard. If the app seems stuck, open it with ?reset in the URL to clear saved data.');
+                        } else {
+                            main.innerHTML = `<div style="padding:40px;text-align:center;color:var(--text-secondary);">
+                                <p style="font-size:1rem;margin-bottom:16px;">Something went wrong rendering this view.</p>
+                                <button class="btn btn-primary" onclick="App.currentView='dashboard';App.render();">Go to Dashboard</button>
+                                <button class="btn" style="margin-left:8px;" onclick="location.href=location.pathname+'?reset'">Reset App Data</button>
+                            </div>`;
+                        }
                     }
-                    }
-                    ViewRenderer.attachDragAndDrop();
                 },
     
                 openFocusView(id) {
