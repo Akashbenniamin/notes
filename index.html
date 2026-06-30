@@ -1,4 +1,4 @@
-    <!DOCTYPE html>
+<!DOCTYPE html>
     <html lang="en" data-theme="saas" data-mode="dark">
     <head>
         <meta charset="UTF-8">
@@ -909,8 +909,11 @@ ${body}
                     });
                 },
 
+                /* FIXED: the original regex's unescaped slashes ("//d/...../")
+                   were parsed as a JS line comment, leaving match( unclosed and
+                   breaking the entire script with a SyntaxError (the "frozen" bug). */
                 extractFileId(urlOrId) {
-                    const m = urlOrId.match(//d/([a-zA-Z0-9_-]{10,})/);
+                    const m = urlOrId.match(/\/d\/([a-zA-Z0-9_-]{10,})\//);
                     if (m) return m[1];
                     const clean = urlOrId.trim().replace(/[?#].*$/, '');
                     if (/^[a-zA-Z0-9_-]{10,}$/.test(clean)) return clean;
