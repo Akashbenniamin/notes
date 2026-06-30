@@ -547,21 +547,27 @@
             <span style='font-weight:400;font-size:0.82rem;'>Click here to clear &amp; reload</span>
         </div>
         <script>
-            // Deterministic reset: wipe all app storage then reload only after DB deletion completes
+            // Reset: clear localStorage, then overwrite the stored app state with null
+            // (We open the DB rather than deleting it — deletion blocks when the page already has it open)
             function NexusReset() {
                 localStorage.clear();
-                var reloaded = false;
-                function doReload() { if (!reloaded) { reloaded = true; location.href = location.pathname; } }
+                var done = false;
+                function reload() { if (!done) { done = true; location.href = location.pathname; } }
                 try {
-                    var req = indexedDB.deleteDatabase('NexusNotesDB');
-                    req.onsuccess = doReload;
-                    req.onerror   = doReload;
-                    // onblocked fires when another tab has the DB open; close it then reload
-                    req.onblocked = function() { doReload(); };
-                    // Hard fallback only if the browser never fires any event (very old browsers)
-                    // Not used as the primary trigger — doReload() is idempotent so it's safe
-                    setTimeout(function() { if (!reloaded) doReload(); }, 4000);
-                } catch(e) { doReload(); }
+                    var req = indexedDB.open('NexusNotesDB', 1);
+                    req.onsuccess = function(e) {
+                        try {
+                            var db = e.target.result;
+                            var tx = db.transaction('state', 'readwrite');
+                            tx.objectStore('state').put({ id: 'appState', data: null });
+                            tx.oncomplete = reload;
+                            tx.onerror    = reload;
+                        } catch(ex) { reload(); }
+                    };
+                    req.onerror = reload;
+                    // Fallback: reload after 2s regardless
+                    setTimeout(reload, 2000);
+                } catch(e) { reload(); }
             }
             // Re-arms itself every 2s — catches both startup blank AND post-render blank states
             function NexusBlankWatchdog() {
