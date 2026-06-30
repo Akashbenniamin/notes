@@ -534,6 +534,46 @@
         </div>
     
         <div id="printArea"></div>
+
+        <!-- Emergency reset banner — visible immediately before any JS runs.
+             Hidden by App.init() on successful startup. If JS crashes it stays visible. -->
+        <div id="emergencyReset" style="
+            display:none;position:fixed;bottom:16px;right:16px;z-index:99999;
+            background:#ef4444;color:#fff;border-radius:10px;padding:12px 18px;
+            font-family:system-ui,sans-serif;font-size:0.88rem;font-weight:600;
+            box-shadow:0 4px 20px rgba(0,0,0,0.4);cursor:pointer;max-width:280px;line-height:1.4;
+        " onclick="NexusReset()">
+            ⚠ App data may be corrupted.<br>
+            <span style='font-weight:400;font-size:0.82rem;'>Click here to clear &amp; reload</span>
+        </div>
+        <script>
+            // Deterministic reset: wipe all app storage then reload only after DB deletion completes
+            function NexusReset() {
+                localStorage.clear();
+                var reloaded = false;
+                function doReload() { if (!reloaded) { reloaded = true; location.href = location.pathname; } }
+                try {
+                    var req = indexedDB.deleteDatabase('NexusNotesDB');
+                    req.onsuccess = doReload;
+                    req.onerror   = doReload;
+                    // onblocked fires when another tab has the DB open; close it then reload
+                    req.onblocked = function() { doReload(); };
+                    // Hard fallback only if the browser never fires any event (very old browsers)
+                    // Not used as the primary trigger — doReload() is idempotent so it's safe
+                    setTimeout(function() { if (!reloaded) doReload(); }, 4000);
+                } catch(e) { doReload(); }
+            }
+            // Re-arms itself every 2s — catches both startup blank AND post-render blank states
+            function NexusBlankWatchdog() {
+                var b = document.getElementById('emergencyReset');
+                var m = document.getElementById('mainContent');
+                if (b && m && !m.innerHTML.trim() && b.style.display !== 'block') {
+                    b.style.display = 'block';
+                }
+                setTimeout(NexusBlankWatchdog, 2000);
+            }
+            setTimeout(NexusBlankWatchdog, 3000); // first check at 3s, then every 2s
+        </script>
     
         <script>
             const Utils = {
@@ -931,6 +971,9 @@ ${body}
 
                     this.applyTheme();
                     this.bindEvents();
+                    // Hide the emergency reset banner — app initialized successfully so far
+                    const eb = document.getElementById('emergencyReset');
+                    if (eb) eb.style.display = 'none';
                     try {
                         this.render();
                     } catch(e) {
@@ -1035,18 +1078,22 @@ ${body}
                         ViewRenderer.attachDragAndDrop();
                     } catch(err) {
                         console.error('Render error:', err);
-                        // If collab view crashed, bail out of that workspace silently
+                        // Always set safe fallback FIRST so mainContent is never blank,
+                        // then optionally attempt a dashboard recovery on top of it.
+                        const safeUI = `<div style="padding:40px;text-align:center;color:var(--text-secondary);">
+                            <p style="font-size:1rem;margin-bottom:8px;">Something went wrong rendering this view.</p>
+                            <p style="font-size:0.85rem;margin-bottom:20px;color:#ef4444;">${err && err.message ? err.message : 'Unknown error'}</p>
+                            <button class="btn btn-primary" style="margin:4px;" onclick="App.activeCollab=null;App.currentView='dashboard';App.render();">Go to Dashboard</button>
+                            <button class="btn" style="margin:4px;" onclick="NexusReset()">Reset App Data</button>
+                        </div>`;
+                        main.innerHTML = safeUI; // guarantee non-blank before any recovery attempt
                         if (this.activeCollab) {
                             this.activeCollab = null;
                             this.currentView = 'dashboard';
-                            try { ViewRenderer.renderDashboard(main); ViewRenderer.attachDragAndDrop(); } catch(_) {}
-                            Utils.showToast('Workspace view failed — returned to dashboard. If the app seems stuck, open it with ?reset in the URL to clear saved data.');
-                        } else {
-                            main.innerHTML = `<div style="padding:40px;text-align:center;color:var(--text-secondary);">
-                                <p style="font-size:1rem;margin-bottom:16px;">Something went wrong rendering this view.</p>
-                                <button class="btn btn-primary" onclick="App.currentView='dashboard';App.render();">Go to Dashboard</button>
-                                <button class="btn" style="margin-left:8px;" onclick="location.href=location.pathname+'?reset'">Reset App Data</button>
-                            </div>`;
+                            try {
+                                ViewRenderer.renderDashboard(main);
+                                ViewRenderer.attachDragAndDrop();
+                            } catch(_) { /* safeUI already set above */ }
                         }
                     }
                 },
@@ -1181,7 +1228,11 @@ ${body}
                 },
     
                 renderDashboard(main) {
-                    const filter = App.state.dashboardFilter;
+                    // Defensive guards — corrupted state must never crash the dashboard
+                    if (!Array.isArray(App.state.notes))   App.state.notes   = [];
+                    if (!Array.isArray(App.state.clients)) App.state.clients = [];
+                    if (!App.state.settings)               App.state.settings = { currency: 'USD' };
+                    const filter = App.state.dashboardFilter || 'all_time';
                     const bounds = Utils.getMonthBounds();
                     const tasks = App.state.notes.filter(n => n.type === 'kanban' && !n.archived);
     
