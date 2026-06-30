@@ -685,11 +685,12 @@
                ========================================================== */
             const GDrive = {
                 CLIENT_ID: '468949850089-8e836r9h9d9k7onj6upi74eig06or9nk.apps.googleusercontent.com', // Replace with your OAuth 2.0 Client ID
-                API_KEY: '', // Replace with your API Key
+                API_KEY: '', // REQUIRED — Google Cloud Console API key. Needed for both Drive API and the Picker UI below.
                 SCOPES: 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive.file',
                 tokenClient: null,
                 gapiInited: false,
                 gisInited: false,
+                pickerInited: false,
                 isSignedIn: false,
                 fileId: null,
     
@@ -707,6 +708,11 @@
                         this.gapiInited = true;
                         this.tryInitAuth();
                     });
+
+                    // Load the Picker UI module separately — needed so a collaborator can
+                    // explicitly "open" a shared file, which grants this app's narrow
+                    // drive.file scope write access to that specific file.
+                    gapi.load('picker', () => { this.pickerInited = true; });
     
                     this.tokenClient = google.accounts.oauth2.initTokenClient({
                         client_id: this.CLIENT_ID,
@@ -862,7 +868,7 @@ ${body}
                 },
 
                 // ─── Shared workspace file operations ────────────────────
-                async createSharedFile(name, initialData) {
+                async createSharedFile(name, initialData, collaboratorEmail) {
                     const boundary = '---nexus_shared_boundary';
                     const meta = JSON.stringify({ name: name + '.nexus', mimeType: 'application/json', description: 'Nexus Shared Workspace' });
                     const body = JSON.stringify({ nexusVersion: 1, name, lastModified: Date.now(), ...initialData });
@@ -882,14 +888,32 @@ ${body}
 --${boundary}--`
                     });
                     const fileId = res.result.id;
-                    // Make file accessible to anyone with the link (editor access)
+                    // Share directly with the collaborator's Google account (writer access).
+                    // We share by email — rather than "anyone with the link" — so the file
+                    // shows up under the collaborator's "Shared with me" in the Picker,
+                    // letting them grant this app's narrow drive.file scope to it by
+                    // explicitly selecting it (instead of widening our OAuth scope app-wide).
                     await gapi.client.request({
                         path: `/drive/v3/files/${fileId}/permissions`,
                         method: 'POST',
+                        params: { sendNotificationEmail: true },
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ role: 'writer', type: 'anyone' })
+                        body: JSON.stringify({ role: 'writer', type: 'user', emailAddress: collaboratorEmail })
                     });
                     return fileId;
+                },
+
+                // Adds (or re-adds) writer access for another collaborator email to an
+                // existing shared workspace file. Lets a workspace grow beyond 2 people
+                // later without recreating it.
+                async addCollaboratorToFile(fileId, email) {
+                    await gapi.client.request({
+                        path: `/drive/v3/files/${fileId}/permissions`,
+                        method: 'POST',
+                        params: { sendNotificationEmail: true },
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ role: 'writer', type: 'user', emailAddress: email })
+                    });
                 },
 
                 async readSharedFile(fileId) {
@@ -907,6 +931,39 @@ ${body}
                         headers: { 'Content-Type': 'application/json' },
                         body
                     });
+                },
+
+                // Opens the Google Picker scoped to "Shared with me" so a collaborator can
+                // explicitly select the workspace file the owner shared with their email.
+                // Selecting it via Picker authorizes this app's drive.file scope for that
+                // exact file — required because "anyone with link" alone is not enough
+                // under the narrow drive.file scope this app uses.
+                showPicker(callback) {
+                    if (!this.isSignedIn) { Utils.showToast('Sign in to Google Drive first.'); return; }
+                    if (!this.pickerInited) { Utils.showToast('Picker still loading, try again in a moment.'); return; }
+                    if (!this.API_KEY) { Utils.showToast('Missing Google API key — add GDrive.API_KEY in the code.'); return; }
+                    const token = gapi.client.getToken();
+                    if (!token || !token.access_token) { Utils.showToast('Sign in to Google Drive first.'); return; }
+
+                    const sharedView = new google.picker.DocsView(google.picker.ViewId.DOCS)
+                        .setOwnedByMe(false)
+                        .setIncludeFolders(false)
+                        .setLabel('Shared with me')
+                        .setMimeTypes('application/json');
+
+                    const picker = new google.picker.PickerBuilder()
+                        .addView(sharedView)
+                        .setOAuthToken(token.access_token)
+                        .setDeveloperKey(this.API_KEY)
+                        .setTitle('Select the workspace file shared with you')
+                        .setCallback((data) => {
+                            if (data.action === google.picker.Action.PICKED) {
+                                const doc = data.docs[0];
+                                callback(doc.id, doc.name);
+                            }
+                        })
+                        .build();
+                    picker.setVisible(true);
                 },
 
                 /* FIXED: the original regex's unescaped slashes ("//d/...../")
@@ -2335,8 +2392,9 @@ ${body}
 
             // ═══════ SHARED WORKSPACE (DRIVE-BACKED) ════════════════════
 
-            App.createCollabWorkspace = async function(name) {
+            App.createCollabWorkspace = async function(name, collaboratorEmail) {
                 if (!GDrive.isSignedIn) { Utils.showToast('Sign in to Google Drive first.'); return; }
+                if (!collaboratorEmail) { Utils.showToast('Enter your collaborator\'s Google email.'); return; }
                 try {
                     Utils.showToast('Creating workspace…');
                     const initialData = {
@@ -2344,29 +2402,21 @@ ${body}
                         clients: this.state.clients.map(c => ({...c})),
                         settings: { currency: this.state.settings.currency }
                     };
-                    const fileId = await GDrive.createSharedFile(name, initialData);
+                    const fileId = await GDrive.createSharedFile(name, initialData, collaboratorEmail);
                     const ws = { shareId: fileId, fileId, name, role: 'owner', addedAt: Date.now(), lastSyncedAt: Date.now(), data: initialData };
                     if (!this.state.sharedWorkspaces) this.state.sharedWorkspaces = [];
                     this.state.sharedWorkspaces.push(ws);
                     this.saveState();
                     this.renderCollabSidebar();
-                    const shareUrl = GDrive.getShareUrl(fileId);
                     App.openCustomModal(`
                         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
                             <h3>Workspace Created ✓</h3>
                             <button class="icon-btn" onclick="App.closeModal()"><svg class="icon"><use href="#i-close"></use></svg></button>
                         </div>
                         <p style="color:var(--text-secondary);font-size:0.875rem;margin-bottom:16px;">
-                            Your workspace <strong>${Utils.escapeHtml(name)}</strong> is live on Google Drive. Share this link with your collaborators — they can open it directly in Nexus.
+                            Your workspace <strong>${Utils.escapeHtml(name)}</strong> is live on Google Drive and shared with <strong>${Utils.escapeHtml(collaboratorEmail)}</strong> (Drive sent them an email notification).
                         </p>
-                        <div style="margin-bottom:12px;">
-                            <label style="font-size:0.8rem;color:var(--text-secondary);display:block;margin-bottom:6px;">Share link (anyone with link can edit)</label>
-                            <div style="display:flex;gap:8px;">
-                                <input class="input-modern" id="wsShareUrl" readonly value="${shareUrl}" style="flex:1;font-size:0.78rem;color:var(--accent);">
-                                <button class="btn btn-primary" onclick="navigator.clipboard.writeText(document.getElementById('wsShareUrl').value);Utils.showToast('Link copied!');">Copy</button>
-                            </div>
-                        </div>
-                        <p style="font-size:0.75rem;color:var(--text-secondary);">Your collaborator opens Nexus → Collaboration → Join Workspace → pastes this link.</p>
+                        <p style="font-size:0.8rem;color:var(--text-secondary);">They should open Nexus → Sign in with the <strong>same Google account</strong> you shared it with → Collaboration → Join Workspace → use the picker to select "<strong>${Utils.escapeHtml(name)}.nexus</strong>" from their "Shared with me" files.</p>
                         <div style="margin-top:16px;">
                             <button class="btn btn-primary" style="width:100%;" onclick="App.closeModal();App.openCollabWorkspace('${fileId}');">Open Workspace</button>
                         </div>
@@ -2377,9 +2427,13 @@ ${body}
                 }
             };
 
-            App.joinCollabWorkspace = async function(urlOrId) {
-                const fileId = GDrive.extractFileId(urlOrId);
-                if (!fileId) { Utils.showToast('Invalid link or file ID.'); return; }
+            // Triggered by the "Select shared file" Picker button. fileId/fileName come
+            // straight from Google Picker, which means the user has just explicitly
+            // authorized this app's drive.file scope for that exact file — so the
+            // subsequent readSharedFile call below will succeed even though the file
+            // wasn't created by this app session.
+            App.joinCollabWorkspace = async function(fileId, fileName) {
+                if (!fileId) { Utils.showToast('No file selected.'); return; }
                 if ((this.state.sharedWorkspaces||[]).find(w => w.fileId === fileId)) {
                     Utils.showToast('Already added this workspace.');
                     this.openCollabWorkspace(fileId);
@@ -2389,17 +2443,17 @@ ${body}
                 try {
                     Utils.showToast('Connecting…');
                     const data = await GDrive.readSharedFile(fileId);
-                    const ws = { shareId: fileId, fileId, name: data.name || 'Shared Workspace', role: 'collaborator', addedAt: Date.now(), lastSyncedAt: Date.now(), data };
+                    const ws = { shareId: fileId, fileId, name: data.name || fileName || 'Shared Workspace', role: 'collaborator', addedAt: Date.now(), lastSyncedAt: Date.now(), data };
                     if (!this.state.sharedWorkspaces) this.state.sharedWorkspaces = [];
                     this.state.sharedWorkspaces.push(ws);
                     this.saveState();
                     this.renderCollabSidebar();
                     App.closeModal();
                     this.openCollabWorkspace(fileId);
-                    Utils.showToast('Joined "' + (data.name || 'Shared Workspace') + '"!');
+                    Utils.showToast('Joined "' + (data.name || fileName || 'Shared Workspace') + '"!');
                 } catch(err) {
                     console.error(err);
-                    Utils.showToast('Could not access file. Make sure the owner shared the link with you.');
+                    Utils.showToast('Could not access file. Make sure the owner shared it with this Google account.');
                 }
             };
 
@@ -2502,22 +2556,52 @@ ${body}
                     <div style="display:flex;flex-direction:column;gap:12px;">
                         <div>
                             <div style="font-size:0.82rem;font-weight:600;margin-bottom:8px;color:var(--text);">Create a new shared workspace</div>
-                            <p style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:10px;">Creates a Google Drive file with your current tasks and clients. Share the link with anyone — they can join from any device.</p>
+                            <p style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:10px;">Creates a Google Drive file with your current tasks and clients, and shares it with your collaborator's Google account so both of you have full write access.</p>
+                            <input class="input-modern" id="wsNameInput" placeholder="Workspace name (e.g. Client Projects)" style="margin-bottom:8px;">
                             <div style="display:flex;gap:8px;">
-                                <input class="input-modern" id="wsNameInput" placeholder="Workspace name (e.g. Client Projects)" style="flex:1;">
-                                <button class="btn btn-primary" onclick="const n=document.getElementById('wsNameInput').value.trim();if(!n){Utils.showToast('Enter a workspace name.');return;}App.closeModal();App.createCollabWorkspace(n);">Create</button>
+                                <input class="input-modern" id="wsEmailInput" type="email" placeholder="Collaborator's Google email" style="flex:1;">
+                                <button class="btn btn-primary" onclick="const n=document.getElementById('wsNameInput').value.trim();const em=document.getElementById('wsEmailInput').value.trim();if(!n){Utils.showToast('Enter a workspace name.');return;}if(!em){Utils.showToast('Enter your collaborator\\'s Google email.');return;}App.closeModal();App.createCollabWorkspace(n,em);">Create</button>
                             </div>
                         </div>
                         <div style="border-top:1px solid var(--border);padding-top:12px;">
-                            <div style="font-size:0.82rem;font-weight:600;margin-bottom:8px;color:var(--text);">Join an existing workspace</div>
-                            <p style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:10px;">Paste the Google Drive link shared with you.</p>
-                            <div style="display:flex;gap:8px;">
-                                <input class="input-modern" id="wsJoinInput" placeholder="https://drive.google.com/file/d/..." style="flex:1;">
-                                <button class="btn btn-primary" onclick="const _jv=document.getElementById('wsJoinInput').value.trim();App.closeModal();App.joinCollabWorkspace(_jv);">Join</button>
-                            </div>
+                            <div style="font-size:0.82rem;font-weight:600;margin-bottom:8px;color:var(--text);">Join a workspace shared with you</div>
+                            <p style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:10px;">Make sure you're signed in with the Google account the owner shared it with, then pick it from your "Shared with me" files.</p>
+                            <button class="btn btn-primary" style="width:100%;" onclick="App.closeModal();GDrive.showPicker((fileId,fileName)=>App.joinCollabWorkspace(fileId,fileName));">
+                                <svg class="icon" style="width:16px;height:16px;"><use href="#i-share"></use></svg> Select shared file…
+                            </button>
                         </div>
                     </div>
                 `);
+            };
+
+            // Lets the owner grant another person write access to an existing
+            // workspace file after the fact (e.g. fixed a typo'd email, or adding
+            // a third teammate later).
+            ViewRenderer.showInviteModal = function(shareId) {
+                App.openCustomModal(`
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+                        <h3>Invite a Collaborator</h3>
+                        <button class="icon-btn" onclick="App.closeModal()"><svg class="icon"><use href="#i-close"></use></svg></button>
+                    </div>
+                    <p style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:10px;">Grants this Google account write access to the workspace file. They'll then sign in with that account and select it via Collaboration → Join Workspace → Select shared file.</p>
+                    <div style="display:flex;gap:8px;">
+                        <input class="input-modern" id="inviteEmailInput" type="email" placeholder="name@example.com" style="flex:1;">
+                        <button class="btn btn-primary" onclick="const em=document.getElementById('inviteEmailInput').value.trim();if(!em){Utils.showToast('Enter an email address.');return;}App.inviteToCollabWorkspace('${shareId}',em);">Invite</button>
+                    </div>
+                `);
+            };
+
+            App.inviteToCollabWorkspace = async function(shareId, email) {
+                const ws = (this.state.sharedWorkspaces||[]).find(w => w.shareId === shareId);
+                if (!ws) return;
+                try {
+                    await GDrive.addCollaboratorToFile(ws.fileId, email);
+                    App.closeModal();
+                    Utils.showToast('Invited ' + email + ' — they\'ll get an email from Drive.');
+                } catch(err) {
+                    console.error(err);
+                    Utils.showToast('Could not invite: ' + ((err.result?.error?.message || err.message || '').substring(0,60)));
+                }
             };
 
             // ═══════ COLLAB VIEWS ═══════════════════════════════════
@@ -2537,7 +2621,7 @@ ${body}
                             </div>
                         </div>
                         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-                            ${ws.role === 'owner' ? `<button class="btn" onclick="navigator.clipboard.writeText(GDrive.getShareUrl('${ws.fileId}'));Utils.showToast('Link copied!')"><svg class="icon" style="width:14px;height:14px;"><use href="#i-share"></use></svg> Copy Link</button>` : ''}
+                            ${ws.role === 'owner' ? `<button class="btn" onclick="ViewRenderer.showInviteModal('${ws.shareId}')"><svg class="icon" style="width:14px;height:14px;"><use href="#i-share"></use></svg> Invite</button>` : ''}
                             <button class="btn" onclick="App.syncCollabWorkspace('${ws.shareId}').then(()=>App.render())"><svg class="icon" style="width:14px;height:14px;"><use href="#i-sync"></use></svg> Sync</button>
                             <button class="btn" onclick="if(confirm('Remove this workspace from your list?'))App.removeCollabWorkspace('${ws.shareId}')" style="color:#ef4444;border-color:rgba(239,68,68,0.4);">Remove</button>
                             <button class="btn" onclick="App.exitCollabMode()">← My Workspace</button>
