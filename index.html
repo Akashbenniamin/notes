@@ -911,7 +911,7 @@ ${body}
                     this.renderCollabSidebar();
                     GDrive.init();
                     Utils.logActivity('Application Initialized');
-                    setTimeout(() => this.checkCollabHash(), 400);
+                    // (checkCollabHash removed – Drive-based collab needs no URL hash)
                 },
     
                 bindEvents() {
@@ -950,12 +950,18 @@ ${body}
                             document.querySelectorAll('.nx-calendar.active').forEach(m => m.remove());
                         }
                     });
+
+                    document.addEventListener('keydown', (e) => {
+                        if (e.key === 'Escape' && (this.isCustomModalOpen || this.focusedNoteId)) {
+                            this.closeModal();
+                        }
+                    });
                 },
     
                 saveState() {
                     this.state.lastModified = Date.now();
                     DB.set('appState', this.state);
-                    if (GDrive.isSignedIn) Utils.debounce(() => GDrive.sync(), 2000)();
+                    if (GDrive.isSignedIn) App._debouncedDriveSync();
                     // Push owner's latest data to any open manager/viewer tabs
                     if (!this._suppressBroadcast && App._collabChannel && (this.state.mySharedIds||[]).length) {
                         const payload = { notes: this.state.notes, clients: this.state.clients, settings: { currency: this.state.settings.currency } };
@@ -2310,11 +2316,13 @@ ${body}
 
             App.saveCollabWorkspace = async function(shareId) {
                 const ws = (this.state.sharedWorkspaces||[]).find(w => w.shareId === shareId);
-                if (!ws || !GDrive.isSignedIn) { this.saveState(); return; }
+                // Always persist the state object (collab workspace list is part of state)
+                this.state.lastModified = Date.now();
+                if (!ws || !GDrive.isSignedIn) { DB.set('appState', this.state); return; }
                 try {
                     ws.data.lastModified = Date.now();
                     ws.lastSyncedAt = Date.now();
-                    this.saveState();
+                    DB.set('appState', this.state); // persist after timestamp mutations
                     await GDrive.writeSharedFile(ws.fileId, ws.data);
                 } catch(err) {
                     console.error('Save collab failed:', err);
@@ -2398,7 +2406,7 @@ ${body}
                             <p style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:10px;">Paste the Google Drive link shared with you.</p>
                             <div style="display:flex;gap:8px;">
                                 <input class="input-modern" id="wsJoinInput" placeholder="https://drive.google.com/file/d/..." style="flex:1;">
-                                <button class="btn btn-primary" onclick="App.closeModal();App.joinCollabWorkspace(document.getElementById('wsJoinInput').value.trim());">Join</button>
+                                <button class="btn btn-primary" onclick="const _jv=document.getElementById('wsJoinInput').value.trim();App.closeModal();App.joinCollabWorkspace(_jv);">Join</button>
                             </div>
                         </div>
                     </div>
@@ -2686,7 +2694,7 @@ ${body}
                 const ws = App.state.sharedWorkspaces.find(w=>w.shareId===shareId);
                 if (!ws) return;
                 ws.data.clients = (ws.data.clients||[]).filter(c=>c.id!==clientId);
-                App.saveCollabWorkspace(shareId).then(()=>App.render());
+                App.saveCollabWorkspace(shareId).then(()=>{ App.closeModal(); App.render(); });
             };
 
             ViewRenderer.exportCollabDatabasePDF = function(shareId) {
@@ -2725,6 +2733,9 @@ ${body}
                 if (w) { w.document.write(html); w.document.close(); }
                 else Utils.showToast('Allow pop-ups to export PDF.');
             };
+
+            // One shared debounced Drive sync — created once so debouncing actually works
+            App._debouncedDriveSync = Utils.debounce(() => GDrive.sync(), 2000);
 
             App.init();
         </script>
