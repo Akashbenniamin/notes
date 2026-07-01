@@ -2,7 +2,7 @@
 <html lang="en" data-theme="saas" data-mode="dark">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Nexus Workspace</title>
 <style>
 :root {
@@ -210,6 +210,17 @@ input[type="number"]{-moz-appearance:textfield}
 /* icon */
 .ic{width:18px;height:18px;stroke:currentColor;stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
 
+/* Offline Overlay */
+#offline-overlay {
+  position: fixed; inset: 0; background: rgba(15, 23, 42, 0.95);
+  display: none; flex-direction: column; align-items: center; justify-content: center;
+  z-index: 9999; text-align: center; color: #fff; padding: 20px;
+  backdrop-filter: blur(8px);
+}
+#offline-overlay.active { display: flex; }
+#offline-overlay h2 { font-size: 2rem; margin-bottom: 10px; }
+#offline-overlay p { color: #94a3b8; max-width: 400px; }
+
 /* print */
 @media screen{#pArea{display:none}}
 @media print{
@@ -228,27 +239,42 @@ input[type="number"]{-moz-appearance:textfield}
 /* ════ MOBILE ════ */
 @media(max-width:768px){
   :root{--hh:50px}
-  .app{grid-template-columns:1fr!important;grid-template-rows:var(--hh) 1fr 56px;grid-template-areas:"hdr""main""bnav"}
+  .app{grid-template-columns:1fr!important;grid-template-rows:var(--hh) 1fr 60px;grid-template-areas:"hdr""main""bnav"}
   aside{display:none!important}
-  main{padding:12px;height:calc(100vh - var(--hh) - 56px);overflow-y:auto}
+  main{padding:12px;height:calc(100vh - var(--hh) - 60px);overflow-y:auto}
   .logo{opacity:1!important;max-width:120px!important}
   .search-bar{max-width:none}
-  .bnav{grid-area:bnav;display:flex;background:var(--bg2);border-top:1px solid var(--bd);height:56px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;z-index:200}
+  .bnav{grid-area:bnav;display:flex;background:var(--bg2);border-top:1px solid var(--bd);height:60px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;z-index:200;padding: 0 5px;}
   .bnav::-webkit-scrollbar{display:none}
-  .bni{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:5px 14px;cursor:pointer;color:var(--tx2);font-size:.62rem;gap:3px;min-width:54px;transition:color .2s;-webkit-tap-highlight-color:transparent}
+  .bni{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:5px;cursor:pointer;color:var(--tx2);font-size:.65rem;gap:4px;min-width:60px;transition:color .2s;-webkit-tap-highlight-color:transparent}
   .bni.act{color:var(--ac)}
-  .bni .ic{width:20px;height:20px}
+  .bni .ic{width:22px;height:22px}
   .ng{grid-template-columns:1fr}
-  .kb{height:auto;flex-direction:column}
-  .kc{min-width:unset}
-  .kcs{max-height:280px}
-  .fc{max-width:100%;max-height:92vh;padding:14px}
+  .kb{height:auto;flex-direction:column;gap:20px}
+  .kc{min-width:unset;max-height: 400px;}
+  .kcs{max-height:340px}
+  .fc{max-width:100%;max-height:92vh;padding:16px;border-radius: 16px 16px 0 0;bottom: 0;position: fixed; left: 0; right: 0; animation: slideUp 0.3s ease-out;}
+  @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
   .hdr-end .ib{display:none}
-  .view-hdr{flex-direction:column;align-items:flex-start}
-  .view-hdr>div{width:100%;flex-wrap:wrap}
+  .view-hdr{flex-direction:row;justify-content: space-between;align-items:center; gap: 10px; margin-bottom: 15px;}
+  .view-hdr h1 { font-size: 1.2rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .view-hdr>div{width:auto;flex-wrap:nowrap}
   .sc-row{flex-direction:column;align-items:flex-start;gap:9px}
   .seg{width:100%}
   .segb{flex:1}
+  
+  /* Mobile Alignment Fixes */
+  .dbf { flex-direction: column; align-items: stretch; gap: 10px; padding: 10px; }
+  .dbf .nxdd, .dbf .dfg { width: 100% !important; min-width: unset !important; }
+  .dbf .inp, .dbf .ddb { height: 40px; font-size: 0.85rem; }
+  .dbt-wrap { margin: 0 -12px; width: calc(100% + 24px); border-radius: 0; }
+  .dbt th, .dbt td { padding: 10px 8px; font-size: 0.7rem; }
+  .kb { padding-bottom: 20px; }
+  .kc { margin-bottom: 10px; }
+  
+  /* Sync Button Mobile */
+  #syncBtn span { display: none; }
+  #syncBtn { padding: 8px; border-radius: 50%; }
 }
 @media(min-width:769px){.bnav{display:none}}
 </style>
@@ -281,7 +307,15 @@ input[type="number"]{-moz-appearance:textfield}
   <symbol id="ic-rst" viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></symbol>
   <symbol id="ic-lst" viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></symbol>
   <symbol id="ic-edit" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></symbol>
+  <symbol id="ic-wifi-off" viewBox="0 0 24 24"><line x1="1" y1="1" x2="23" y2="23"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/><path d="M10.71 5.05A16 16 0 0 1 22.58 9"/><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></symbol>
 </svg>
+
+<div id="offline-overlay">
+  <svg class="ic" style="width:64px;height:64px;margin-bottom:20px;color:#ef4444"><use href="#ic-wifi-off"/></svg>
+  <h2>Connection Lost</h2>
+  <p>Nexus Workspace requires an active internet connection to sync your data. Please check your network and try again.</p>
+  <button class="btn btn-p" style="margin-top:20px" onclick="location.reload()">Retry Connection</button>
+</div>
 
 <div class="app" id="app">
   <header>
@@ -293,7 +327,12 @@ input[type="number"]{-moz-appearance:textfield}
       <svg class="ic"><use href="#ic-search"/></svg>
       <input type="text" id="searchInput" placeholder="Search…" autocomplete="off">
     </div>
-    <div class="hdr-end"></div>
+    <div class="hdr-end">
+      <button class="btn" id="syncBtn" onclick="Cloud.sync()" title="Sync with Cloud">
+        <svg class="ic" style="width:16px;height:16px"><use href="#ic-rst"/></svg>
+        <span class="nav-lbl">Sync</span>
+      </button>
+    </div>
   </header>
 
   <aside id="sidebar">
@@ -340,6 +379,9 @@ input[type="number"]{-moz-appearance:textfield}
   ⚠ App may be corrupted.<br><span style="font-weight:400;font-size:.76rem">Tap to clear &amp; reload</span>
 </div>
 
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://apis.google.com/js/api.js" async defer></script>
+
 <script>
 function NexusReset(){localStorage.clear();var done=false;function go(){if(!done){done=true;location.href=location.pathname;}}try{var r=indexedDB.open('NexusV2',1);r.onsuccess=function(e){try{var db=e.target.result,tx=db.transaction('s','readwrite');tx.objectStore('s').clear();tx.oncomplete=go;tx.onerror=go;}catch(ex){go();}};r.onerror=go;setTimeout(go,2000);}catch(e){go();}}
 (function wd(){var b=document.getElementById('er'),m=document.getElementById('main');if(b&&m&&!m.innerHTML.trim()&&b.style.display!=='block')b.style.display='block';setTimeout(wd,2600);})();
@@ -364,6 +406,188 @@ const U={
   copyClip(id){var n=App.state.notes.find(n=>n.id===id);if(n){navigator.clipboard.writeText(n.content);U.toast('Copied!');}}
 };
 
+/* ── Cloud Sync (Google Drive) ── */
+const Cloud = {
+  CLIENT_ID: 'YOUR_CLIENT_ID.apps.googleusercontent.com',
+  SCOPES: 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive.file',
+  DISCOVERY_DOC: 'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest',
+  tokenClient: null,
+  accessToken: null,
+
+  async init() {
+    this.checkStatus();
+    window.addEventListener('online', () => this.checkStatus());
+    window.addEventListener('offline', () => this.checkStatus());
+    setInterval(() => this.checkStatus(), 5000);
+    
+    // Initialize GAPI and GIS
+    try {
+      await new Promise(r => {
+        const s = document.createElement('script');
+        s.src = 'https://apis.google.com/js/api.js';
+        s.onload = () => gapi.load('client', async () => {
+          await gapi.client.init({ discoveryDocs: [this.DISCOVERY_DOC] });
+          r();
+        });
+        document.head.appendChild(s);
+      });
+      
+      this.tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: this.CLIENT_ID,
+        scope: this.SCOPES,
+        callback: (resp) => {
+          if (resp.error) return;
+          this.accessToken = resp.access_token;
+          this.performSync();
+        },
+      });
+    } catch (e) { console.error('Cloud Init Error:', e); }
+  },
+
+  checkStatus() {
+    const overlay = document.getElementById('offline-overlay');
+    if (!navigator.onLine) overlay.classList.add('active');
+    else overlay.classList.remove('active');
+  },
+
+  async sync() {
+    if (!navigator.onLine) { U.toast('Offline. Cannot sync.'); return; }
+    if (!this.accessToken) {
+      this.tokenClient.requestAccessToken({ prompt: 'none' });
+    } else {
+      this.performSync();
+    }
+  },
+
+  async performSync() {
+    U.toast('Syncing with Google Drive...');
+    try {
+      const fileId = await this.getFileId();
+      const remoteData = fileId ? await this.getFileContent(fileId) : null;
+      
+      // Load all local workspaces
+      const wsList = await DB.get('wsList') || [];
+      const allLocalData = {};
+      for (const ws of wsList) {
+        allLocalData[ws.id] = await DB.get('wsData_' + ws.id);
+      }
+      
+      const localPackage = { wsList, data: allLocalData, lastModified: Date.now() };
+
+      if (!remoteData) {
+        await this.saveToDrive(localPackage);
+        U.toast('First time sync: Data uploaded');
+        return;
+      }
+
+      // Robust Merge Logic
+      const merged = this.merge(localPackage, remoteData);
+      
+      // Save merged data back to local DB
+      await DB.set('wsList', merged.wsList);
+      for (const id in merged.data) {
+        await DB.set('wsData_' + id, merged.data[id]);
+      }
+      
+      // Save merged data back to Drive
+      await this.saveToDrive(merged);
+      
+      // Reload current workspace
+      await WS.init();
+      await WS.loadActive();
+      App.render();
+      U.toast('Sync Complete: Data Merged');
+    } catch (e) {
+      console.error('Sync Error:', e);
+      U.toast('Sync Failed. Check Console.');
+    }
+  },
+
+  // Conflict Resolution: Item-level timestamp comparison
+  merge(local, remote) {
+    const result = { wsList: [], data: {}, lastModified: Math.max(local.lastModified, remote.lastModified) };
+    
+    // 1. Merge Workspace List
+    const allWs = [...local.wsList];
+    remote.wsList.forEach(rw => {
+      if (!allWs.find(lw => lw.id === rw.id)) allWs.push(rw);
+    });
+    result.wsList = allWs;
+
+    // 2. Merge Data for each Workspace
+    const allIds = new Set([...Object.keys(local.data), ...Object.keys(remote.data)]);
+    allIds.forEach(id => {
+      const l = local.data[id] || App.def();
+      const r = remote.data[id] || App.def();
+      
+      result.data[id] = {
+        ...l,
+        settings: (l.lastModified || 0) > (r.lastModified || 0) ? l.settings : r.settings,
+        notes: this.mergeCollections(l.notes, r.notes),
+        clients: this.mergeCollections(l.clients, r.clients),
+        lastModified: Math.max(l.lastModified || 0, r.lastModified || 0)
+      };
+    });
+
+    return result;
+  },
+
+  mergeCollections(localArr, remoteArr) {
+    const map = new Map();
+    [...(localArr || []), ...(remoteArr || [])].forEach(item => {
+      const existing = map.get(item.id);
+      if (!existing || (item.lastModified || 0) > (existing.lastModified || 0)) {
+        map.set(item.id, item);
+      }
+    });
+    return Array.from(map.values());
+  },
+
+  async getFileId() {
+    const resp = await gapi.client.drive.files.list({
+      q: "name = 'nexus_workspace_v2.json' and trashed = false",
+      spaces: 'appDataFolder',
+      fields: 'files(id)'
+    });
+    return resp.result.files[0]?.id;
+  },
+
+  async getFileContent(id) {
+    const resp = await gapi.client.drive.files.get({ fileId: id, alt: 'media' });
+    return resp.result;
+  },
+
+  async saveToDrive(data) {
+    const fileId = await this.getFileId();
+    const metadata = { name: 'nexus_workspace_v2.json', parents: ['appDataFolder'] };
+    const content = JSON.stringify(data);
+    
+    if (fileId) {
+      await gapi.client.request({
+        path: `/upload/drive/v3/files/${fileId}`,
+        method: 'PATCH',
+        params: { uploadType: 'media' },
+        body: content
+      });
+    } else {
+      const boundary = '-------314159265358979323846';
+      const delimiter = "\r\n--" + boundary + "\r\n";
+      const close_delim = "\r\n--" + boundary + "--";
+      const multipartRequestBody =
+        delimiter + 'Content-Type: application/json\r\n\r\n' + JSON.stringify(metadata) +
+        delimiter + 'Content-Type: application/json\r\n\r\n' + content + close_delim;
+
+      await gapi.client.request({
+        path: '/upload/drive/v3/files',
+        method: 'POST',
+        params: { uploadType: 'multipart' },
+        headers: { 'Content-Type': 'multipart/related; boundary="' + boundary + '"' },
+        body: multipartRequestBody
+      });
+    }
+  }
+};
+
 /* ── Workspace Manager ── */
 const WS={
   list:[],activeId:null,
@@ -379,7 +603,11 @@ const WS={
     var d=await DB.get('wsData_'+this.activeId);
     App.state=d?{...App.def(),...d}:App.def();
   },
-  async saveActive(){await DB.set('wsData_'+this.activeId,App.state);await DB.set('wsActive',this.activeId);},
+  async saveActive(){
+    App.state.lastModified = Date.now();
+    await DB.set('wsData_'+this.activeId,App.state);
+    await DB.set('wsActive',this.activeId);
+  },
   async switchTo(id){
     if(id===this.activeId)return;
     await this.saveActive();
@@ -434,6 +662,7 @@ const App={
   def:()=>({notes:[],clients:[],settings:{theme:'saas',mode:'dark',fontSize:15,currency:'USD'},lastModified:0,dashFilter:'all_time'}),
 
   async init(){
+    Cloud.init();
     await DB.init();
     if(new URLSearchParams(location.search).has('reset')){await DB.set('wsList',null);await DB.set('wsActive',null);history.replaceState(null,'',location.pathname);}
     await WS.init();await WS.loadActive();
@@ -491,7 +720,7 @@ const App={
   close(){this.focId=null;this.modOpen=false;document.getElementById('fo').classList.remove('act');this.save();this.render();},
 
   addNote(type,data={}){
-    var n={id:U.uid(),type,title:'',content:'',created:Date.now(),pinned:false,archived:false,bgColor:'default',...data};
+    var n={id:U.uid(),type,title:'',content:'',created:Date.now(),lastModified:Date.now(),pinned:false,archived:false,bgColor:'default',...data};
     if(type==='kanban'){n.status=n.status||'Pending';n.order=n.order||Date.now();n.videos=n.videos!==undefined?n.videos:1;n.price=n.price||0;n.pricingType=n.pricingType||'total';n.receivedDate=n.receivedDate||Date.now();}
     if(type==='standard'&&n.isChecklist)n.items=n.items||[];
     this.state.notes.unshift(n);this.save();return n;
@@ -500,23 +729,23 @@ const App={
   handleClient(nid,name){
     if(!name){this.upNote(nid,'clientId','');return;}
     var cl=this.state.clients.find(c=>c.name.toLowerCase()===name.toLowerCase());
-    if(!cl){var cols=['#ef4444','#f59e0b','#10b981','#3b82f6','#6366f1','#8b5cf6','#ec4899'];cl={id:U.uid(),name,color:cols[this.state.clients.length%cols.length],email:'',company:'',paymentType:'per_video',monthlySalary:0};this.state.clients.push(cl);this.save();U.toast(`Client "${name}" created`);}
+    if(!cl){var cols=['#ef4444','#f59e0b','#10b981','#3b82f6','#6366f1','#8b5cf6','#ec4899'];cl={id:U.uid(),name,color:cols[this.state.clients.length%cols.length],email:'',company:'',paymentType:'per_video',monthlySalary:0,lastModified:Date.now()};this.state.clients.push(cl);this.save();U.toast(`Client "${name}" created`);}
     this.upNote(nid,'clientId',cl.id);
   },
-  upNote(id,k,v){var n=this.state.notes.find(n=>n.id===id);if(n){n[k]=v;this.save();}},
-  togglePin(id){var n=this.state.notes.find(n=>n.id===id);if(n){n.pinned=!n.pinned;this.save();if(this.focId===id)V.focCard();else this.render();}},
+  upNote(id,k,v){var n=this.state.notes.find(n=>n.id===id);if(n){n[k]=v;n.lastModified=Date.now();this.save();}},
+  togglePin(id){var n=this.state.notes.find(n=>n.id===id);if(n){n.pinned=!n.pinned;n.lastModified=Date.now();this.save();if(this.focId===id)V.focCard();else this.render();}},
   delNote(id){var n=this.state.notes.find(n=>n.id===id);if(n){this.state.notes=this.state.notes.filter(x=>x.id!==id);this.undoStack.push({type:'del',note:JSON.parse(JSON.stringify(n))});this.save();this.close();U.toast('Deleted',()=>App.undoDel());}},
   undoDel(){var a=this.undoStack.pop();if(a&&a.type==='del'){this.state.notes.unshift(a.note);this.save();this.render();}},
-  archiveNote(id){var n=this.state.notes.find(n=>n.id===id);if(n){n.archived=true;this.save();this.close();}},
+  archiveNote(id){var n=this.state.notes.find(n=>n.id===id);if(n){n.archived=true;n.lastModified=Date.now();this.save();this.close();}},
   setBg(id,c){this.upNote(id,'bgColor',c);V.focCard();},
   toggleCPal(){document.getElementById('cpp').classList.toggle('act');document.getElementById('fmtP').classList.remove('act');},
   toggleFmt(){document.getElementById('fmtP').classList.toggle('act');document.getElementById('cpp').classList.remove('act');},
-  setStatus(id,status){var n=this.state.notes.find(n=>n.id===id);if(n){n.status=status;if(status==='Completed'&&!n.completedDate)n.completedDate=Date.now();else if(status!=='Completed')n.completedDate=null;this.save();}},
-  toggleDone(id){var n=this.state.notes.find(n=>n.id===id);if(n){n.status=n.status==='Completed'?'Pending':'Completed';if(n.status==='Completed'&&!n.completedDate)n.completedDate=Date.now();if(n.status!=='Completed')n.completedDate=null;this.save();this.render();}},
-  addCLI(id){var n=this.state.notes.find(n=>n.id===id);if(n){if(!n.items)n.items=[];n.items.push({text:'',done:false});this.save();V.focCard();}},
-  updCLI(id,i,t){var n=this.state.notes.find(n=>n.id===id);if(n&&n.items[i]){n.items[i].text=t;this.save();}},
-  togCLI(id,i,c){var n=this.state.notes.find(n=>n.id===id);if(n&&n.items[i]){n.items[i].done=c;this.save();V.focCard();}},
-  delCLI(id,i){var n=this.state.notes.find(n=>n.id===id);if(n){n.items.splice(i,1);this.save();V.focCard();}}
+  setStatus(id,status){var n=this.state.notes.find(n=>n.id===id);if(n){n.status=status;if(status==='Completed'&&!n.completedDate)n.completedDate=Date.now();else if(status!=='Completed')n.completedDate=null;n.lastModified=Date.now();this.save();}},
+  toggleDone(id){var n=this.state.notes.find(n=>n.id===id);if(n){n.status=n.status==='Completed'?'Pending':'Completed';if(n.status==='Completed'&&!n.completedDate)n.completedDate=Date.now();if(n.status!=='Completed')n.completedDate=null;n.lastModified=Date.now();this.save();this.render();}},
+  addCLI(id){var n=this.state.notes.find(n=>n.id===id);if(n){if(!n.items)n.items=[];n.items.push({text:'',done:false});n.lastModified=Date.now();this.save();V.focCard();}},
+  updCLI(id,i,t){var n=this.state.notes.find(n=>n.id===id);if(n&&n.items[i]){n.items[i].text=t;n.lastModified=Date.now();this.save();}},
+  togCLI(id,i,c){var n=this.state.notes.find(n=>n.id===id);if(n&&n.items[i]){n.items[i].done=c;n.lastModified=Date.now();this.save();V.focCard();}},
+  delCLI(id,i){var n=this.state.notes.find(n=>n.id===id);if(n){n.items.splice(i,1);n.lastModified=Date.now();this.save();V.focCard();}}
 };
 
 /* ── Views ── */
@@ -550,7 +779,7 @@ const V={
       <div class="ng">${this.cards(App.state.notes.filter(n=>!n.archived&&(n.type==='standard'||n.type==='kanban')).slice(0,8))}</div>`;
   },
 
-  notes(m){m.innerHTML=`<div class="view-hdr"><h1>My Notes</h1><div style="display:flex;gap:7px;flex-wrap:wrap"><button class="btn" onclick="App.openNote(App.addNote('standard',{isChecklist:true}).id)"><svg class="ic" style="width:14px;height:14px"><use href="#ic-lst"/></svg> Checklist</button><button class="btn btn-p" onclick="App.openNote(App.addNote('standard').id)"><svg class="ic" style="width:14px;height:14px"><use href="#ic-plus"/></svg> New Note</button></div></div><div class="ng">${this.cards(this.fil('standard'))}</div>`;},
+  notes(m){m.innerHTML=`<div class="view-hdr"><h1>My Notes</h1><div style="display:flex;gap:7px;flex-wrap:wrap"><button class="btn" onclick="App.openNote(App.addNote('standard',{isChecklist:true}).id)"><svg class="ic" style="width:14px;height:14px"><use href="#ic-lst"/></svg> Checklist</button><button class="btn btn-p" onclick="App.openNote(App.addNote('standard').id)"><svg class="ic" style="width:14px;height:14px"><use href="#ic-plus"/></svg> New Note</button></div></div><div class="ng">${this.fil('standard')}</div>`;},
   archive(m){m.innerHTML=`<div class="view-hdr"><h1>Archive</h1></div><div class="ng">${this.cards(App.state.notes.filter(n=>n.archived))}</div>`;},
 
   cards(notes){
@@ -623,8 +852,7 @@ const V={
     var ps=this.fil('prompt').sort((a,b)=>(b.pinned?1:0)-(a.pinned?1:0));
     m.innerHTML=`<div class="view-hdr"><h1>Prompt Library</h1><button class="btn btn-p" onclick="App.openNote(App.addNote('prompt').id)">+ New Prompt</button></div>
       <div class="ng">${ps.map(p=>`<div class="card" onclick="App.openNote('${p.id}')" data-id="${p.id}" draggable="true">
-        <div class="co"><button class="ib" style="padding:3px" onclick="event.stopPropagation();App.togglePin('${p.id}')"><svg class="ic" style="width:14px;height:14px;${p.pinned?'fill:currentColor':''}"><use href="#ic-pin"/></svg></button><button class="ib" style="padding:3px" onclick="event.stopPropagation();U.copyClip('${p.id}')"><svg class="ic" style="width:14px;height:14px"><use href="#ic-copy"/></svg></button></div>
-        <h3 style="margin-bottom:3px;font-size:.97rem">${U.esc(p.title)||'Untitled'}</h3>
+        <div class="co"><button class="ib" style="padding:3px" onclick="event.stopPropagation();App.togglePin('${p.id}')"><svg class="ic" style="width:14px;height:14px;${p.pinned?'fill:currentColor':''}"><use href="#ic-pin"/></svg></button><button class="ib" style="padding:3px" onclick="event.stopPropagation();App.delNote('${p.id}')"><svg class="ic" style="width:14px;height:14px"><use href="#ic-tr"/></svg></button></div>
         <div style="font-size:.7rem;background:var(--bg2);padding:2px 6px;border-radius:4px;display:inline-block;margin-bottom:6px;color:var(--ac)">${p.category||'General'}</div>
         <div style="font-size:.82rem;color:var(--tx2);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${U.esc(U.txt(p.content))}</div>
       </div>`).join('')}</div>`;
@@ -731,7 +959,7 @@ const V={
           <input class="inp" placeholder="Email" value="${U.esc(c.email||'')}" oninput="App.state.clients.find(x=>x.id==='${c.id}').email=this.value;App.save()">
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
             <select class="inp" onchange="App.state.clients.find(x=>x.id==='${c.id}').paymentType=this.value;App.save();V.manClients()"><option value="per_video" ${c.paymentType!=='monthly'?'selected':''}>Per Video</option><option value="monthly" ${c.paymentType==='monthly'?'selected':''}>Monthly</option></select>
-            ${c.paymentType==='monthly'?`<div class="ig"><span class="ii">${cs}</span><input type="number" class="inp iwi" placeholder="Salary" value="${c.monthlySalary||0}" oninput="App.state.clients.find(x=>x.id==='${c.id}').monthlySalary=parseFloat(this.value)||0;App.save()"></div>`:'<div></div>'}
+            ${c.paymentType==='monthly'?`<div class="ig"><span class="ii">${cs}</span><input type="number" class="inp iwi" placeholder="Salary" value="${c.monthlySalary||0}" oninput="App.state.clients.find(x=>x.id==='${c.id}').monthlySalary=parseFloat(this.value)||0;App.save()"></div>`:''}
           </div>
           <button class="btn" style="color:#ef4444" onclick="App.state.clients=App.state.clients.filter(x=>x.id!=='${c.id}');App.save();V.manClients()">Delete</button>
         </div>`).join('')}
