@@ -2370,15 +2370,17 @@ ${body}
 
             // ═══════ SHARED WORKSPACE (DRIVE-BACKED) ════════════════════
 
-            App.createCollabWorkspace = async function(name, collaboratorEmail) {
+            App.createCollabWorkspace = async function(name, collaboratorEmail, startBlank) {
                 if (!GDrive.isSignedIn) { Utils.showToast('Sign in to Google Drive first.'); return; }
                 try {
                     Utils.showToast('Creating workspace…');
-                    const initialData = {
-                        notes: this.state.notes.filter(n => n.type === 'kanban' && !n.archived).map(n => ({...n})),
-                        clients: this.state.clients.map(c => ({...c})),
-                        settings: { currency: this.state.settings.currency }
-                    };
+                    const initialData = startBlank
+                        ? { notes: [], clients: [], settings: { currency: this.state.settings.currency } }
+                        : {
+                            notes: this.state.notes.filter(n => n.type === 'kanban' && !n.archived).map(n => ({...n})),
+                            clients: this.state.clients.map(c => ({...c})),
+                            settings: { currency: this.state.settings.currency }
+                        };
                     const fileId = await GDrive.createSharedFile(name, initialData, collaboratorEmail);
                     const ws = { shareId: fileId, fileId, name, role: 'owner', addedAt: Date.now(), lastSyncedAt: Date.now(), data: initialData };
                     if (!this.state.sharedWorkspaces) this.state.sharedWorkspaces = [];
@@ -2538,8 +2540,12 @@ ${body}
                             <div style="font-size:0.82rem;font-weight:600;margin-bottom:8px;color:var(--text);">Create a new shared workspace</div>
                             <p style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:10px;">Creates a Google Drive file with your current tasks and clients. Anyone with the link gets full write access — share it with your collaborator.</p>
                             <input class="input-modern" id="wsNameInput" placeholder="Workspace name (e.g. Client Projects)" style="margin-bottom:8px;">
-                            <input class="input-modern" id="wsEmailInput" type="email" placeholder="Collaborator's email (optional — sends them a Drive notification)" style="margin-bottom:8px;">
-                            <button class="btn btn-primary" style="width:100%;" onclick="const n=document.getElementById('wsNameInput').value.trim();const em=document.getElementById('wsEmailInput').value.trim();if(!n){Utils.showToast('Enter a workspace name.');return;}App.closeModal();App.createCollabWorkspace(n,em||undefined);">Create</button>
+                            <input class="input-modern" id="wsEmailInput" type="email" placeholder="Collaborator's email (optional — sends Drive notification)" style="margin-bottom:8px;">
+                            <div style="display:flex;gap:8px;margin-bottom:10px;" id="wsDataChoiceGroup">
+                                <button id="wsBtnCopy" class="btn btn-primary" style="flex:1;font-size:0.82rem;" onclick="window._wsStartBlank=false;document.getElementById('wsBtnCopy').classList.add('btn-primary');document.getElementById('wsBtnBlank').classList.remove('btn-primary');">📋 Copy my current data</button>
+                                <button id="wsBtnBlank" class="btn" style="flex:1;font-size:0.82rem;" onclick="window._wsStartBlank=true;document.getElementById('wsBtnBlank').classList.add('btn-primary');document.getElementById('wsBtnCopy').classList.remove('btn-primary');">✨ Start blank</button>
+                            </div>
+                            <button class="btn btn-primary" style="width:100%;" onclick="if(typeof window._wsStartBlank==='undefined')window._wsStartBlank=false;const n=document.getElementById('wsNameInput').value.trim();const em=document.getElementById('wsEmailInput').value.trim();if(!n){Utils.showToast('Enter a workspace name.');return;}const sb=window._wsStartBlank;window._wsStartBlank=undefined;App.closeModal();App.createCollabWorkspace(n,em||undefined,sb);">Create & Share</button>
                         </div>
                         <div style="border-top:1px solid var(--border);padding-top:12px;">
                             <div style="font-size:0.82rem;font-weight:600;margin-bottom:8px;color:var(--text);">Join an existing workspace</div>
@@ -2615,7 +2621,7 @@ ${body}
                 `;
                 const el = document.getElementById('collabContent');
                 if (subView === 'dashboard') this.renderCollabDashboard(el, ws.data, ws);
-                else if (subView === 'kanban') this.renderCollabKanban(el, ws);
+                else if (subView === 'kanban') { this.renderCollabKanban(el, ws); this.attachCollabKanbanDnD(ws.shareId); }
                 else if (subView === 'database') this.renderCollabDatabase(el, ws);
             };
 
@@ -2649,43 +2655,66 @@ ${body}
                 const data = ws.data;
                 const tasks = (data.notes||[]).filter(n=>!n.archived).sort((a,b)=>(a.order||0)-(b.order||0));
                 const clients = data.clients||[];
+                const currency = (data.settings||{}).currency||'USD';
                 const cols = ['Pending','In Progress','Revision','Completed'];
                 const sid = ws.shareId;
                 el.innerHTML = `
-                    <div style="margin-bottom:12px;display:flex;gap:8px;justify-content:flex-end;">
-                        <button class="btn btn-primary" onclick="ViewRenderer.addCollabTask('${sid}')">+ Add Task</button>
+                    <div style="margin-bottom:12px;display:flex;gap:10px;justify-content:flex-end;">
+                        <button class="btn" onclick="ViewRenderer.collabManageClientsModal('${sid}')">Manage Clients</button>
+                        <button class="btn btn-primary" onclick="ViewRenderer.addCollabTask('${sid}')">+ New Task</button>
                     </div>
                     <div class="kanban-board" style="height:calc(100vh - 340px);">
                         ${cols.map(col => `
                             <div class="kanban-col" data-status="${col}">
                                 <div class="kanban-col-header">${col} <span style="color:var(--text-secondary);">${tasks.filter(t=>t.status===col).length}</span></div>
-                                <div class="kanban-cards">
-                                    ${tasks.filter(t=>t.status===col).map(t=>{
-                                        const cl=clients.find(c=>c.id===t.clientId);
-                                        const currency=(data.settings||{}).currency||'USD';
-                                        const price=t.pricingType==='per_video'?(t.videos||0)*(t.price||0):(t.price||0);
-                                        const priceStr=currency==='INR'?`₹${price}`:`${price}`;
-                                        return `<div class="kanban-card ${t.status==='Completed'?'completed':''}" style="${cl?'border-left:4px solid '+cl.color+';':''}">
-                                            <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:6px;">
-                                                <h4 style="font-size:0.95rem;flex:1;">${Utils.escapeHtml(t.title)||'Untitled'}</h4>
-                                                <button class="icon-btn" style="padding:2px;flex-shrink:0;" title="Edit" onclick="ViewRenderer.editCollabTask('${sid}','${t.id}')"><svg class="icon" style="width:14px;height:14px;"><use href="#i-edit"></use></svg></button>
-                                            </div>
-                                            <div style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:4px;">${cl?cl.name:'No client'}</div>
-                                            <div style="font-size:0.78rem;color:var(--text-secondary);display:flex;gap:8px;margin-bottom:8px;">
-                                                <span><svg style="width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:2;vertical-align:middle;" viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg> ${t.videos||0}</span>
-                                                <span style="color:var(--accent);">${priceStr}</span>
-                                                <span>Recv: ${Utils.formatDate(t.receivedDate)}</span>
-                                            </div>
-                                            <div style="display:flex;gap:4px;flex-wrap:wrap;">
-                                                ${cols.filter(s=>s!==col).map(s=>`<button style="font-size:0.68rem;padding:2px 6px;border-radius:4px;border:1px solid var(--border);background:var(--bg-tertiary);color:var(--text-secondary);cursor:pointer;" onclick="ViewRenderer._collabSetStatus('${sid}','${t.id}','${s}')">${s}</button>`).join('')}
-                                            </div>
-                                        </div>`;
-                                    }).join('')}
+                                <div class="kanban-cards" data-status="${col}">
+                                    ${tasks.filter(t=>t.status===col).map(t => this.renderCollabKanbanCard(t, clients, currency, sid)).join('')}
                                 </div>
                             </div>
                         `).join('')}
                     </div>
                 `;
+            };
+
+            ViewRenderer.renderCollabKanbanCard = function(t, clients, currency, shareId) {
+                const client = clients.find(c => c.id === t.clientId);
+                const borderColor = client ? `border-left: 4px solid ${client.color};` : '';
+                const price = t.pricingType === 'per_video' ? (t.videos||0)*(t.price||0) : (t.price||0);
+                const revenue = client && client.paymentType === 'monthly' ? 'Monthly' : (currency === 'INR' ? `₹${price}` : `$${price}`);
+                return `
+                    <div class="kanban-card ${t.status === 'Completed' ? 'completed' : ''}"
+                         style="${borderColor}" data-id="${t.id}" draggable="true" ondblclick="ViewRenderer.editCollabTask('${shareId}','${t.id}')">
+                        <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:8px;">
+                            <h4 style="font-size: 1rem;">${Utils.escapeHtml(t.title) || 'Untitled Task'}</h4>
+                            <button class="icon-btn" style="padding: 2px;" onclick="event.stopPropagation(); ViewRenderer._collabToggleComplete('${shareId}','${t.id}')" title="Toggle Complete">
+                                <svg class="icon" style="width:16px;height:16px; ${t.status === 'Completed' ? 'stroke:#10b981; stroke-width:3;' : ''}"><use href="#i-check"></use></svg>
+                            </button>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; font-size:0.85rem; color:var(--text-secondary);">
+                            <div><strong>Client:</strong> ${client ? client.name : 'N/A'}</div>
+                            <div style="display:flex; gap:8px;">
+                                <span style="display:flex; align-items:center; gap:4px;">
+                                    <svg style="width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
+                                    ${t.videos || 0}
+                                </span>
+                                <span>${revenue}</span>
+                            </div>
+                        </div>
+                        <div style="margin-top:6px; font-size:0.8rem; color:var(--text-secondary);">
+                            <strong>Received:</strong> ${Utils.formatDate(t.receivedDate)} | <strong>Completed:</strong> ${Utils.formatDate(t.completedDate)}
+                        </div>
+                    </div>
+                `;
+            };
+
+            ViewRenderer._collabToggleComplete = function(shareId, taskId) {
+                const ws = App.state.sharedWorkspaces.find(w=>w.shareId===shareId);
+                if (!ws) return;
+                const task = (ws.data.notes||[]).find(n=>n.id===taskId);
+                if (!task) return;
+                task.status = task.status === 'Completed' ? 'Pending' : 'Completed';
+                task.completedDate = task.status === 'Completed' ? Date.now() : null;
+                App.saveCollabWorkspace(shareId).then(() => App.render());
             };
 
             ViewRenderer._collabSetStatus = function(shareId, taskId, newStatus) {
@@ -2696,6 +2725,93 @@ ${body}
                 task.status = newStatus;
                 task.completedDate = newStatus === 'Completed' ? Date.now() : null;
                 App.saveCollabWorkspace(shareId).then(() => App.render());
+            };
+
+            // Drag-and-drop for the shared-workspace kanban board, mirroring
+            // ViewRenderer.attachKanbanDnD() used by the personal workspace.
+            ViewRenderer.attachCollabKanbanDnD = function(shareId) {
+                let dragged = null;
+                document.querySelectorAll('#collabContent .kanban-card').forEach(card => {
+                    card.addEventListener('dragstart', (e) => { dragged = card; setTimeout(() => card.classList.add('dragging'), 0); });
+                    card.addEventListener('dragend', (e) => {
+                        card.classList.remove('dragging');
+                        ViewRenderer.updateCollabKanbanOrder(shareId);
+                    });
+                });
+                document.querySelectorAll('#collabContent .kanban-cards').forEach(col => {
+                    col.addEventListener('dragover', (e) => {
+                        e.preventDefault();
+                        if (!dragged) return;
+                        const afterElement = [...col.querySelectorAll('.kanban-card:not(.dragging)')].find(elx => {
+                            return e.clientY < elx.getBoundingClientRect().top + elx.offsetHeight / 2;
+                        });
+                        if (afterElement == null) col.appendChild(dragged);
+                        else col.insertBefore(dragged, afterElement);
+                    });
+                });
+            };
+
+            // Reads the post-drag DOM order/columns and writes status + order back
+            // into ws.data.notes, then persists to Drive — mirrors App.updateKanbanOrder().
+            ViewRenderer.updateCollabKanbanOrder = function(shareId) {
+                const ws = App.state.sharedWorkspaces.find(w=>w.shareId===shareId);
+                if (!ws) return;
+                document.querySelectorAll('#collabContent .kanban-cards').forEach(col => {
+                    const status = col.dataset.status;
+                    [...col.children].forEach((card, index) => {
+                        const task = (ws.data.notes||[]).find(n => n.id === card.dataset.id);
+                        if (!task) return;
+                        const wasCompleted = task.status === 'Completed';
+                        task.order = index;
+                        task.status = status;
+                        if (status === 'Completed' && !wasCompleted) task.completedDate = Date.now();
+                        if (status !== 'Completed') task.completedDate = null;
+                    });
+                });
+                App.saveCollabWorkspace(shareId).then(() => App.render());
+            };
+
+            // Mirrors ViewRenderer.manageClientsModal(), scoped to a shared workspace's
+            // own client list (ws.data.clients) instead of the personal one.
+            ViewRenderer.collabManageClientsModal = function(shareId) {
+                const ws = App.state.sharedWorkspaces.find(w=>w.shareId===shareId);
+                if (!ws) return;
+                if (!ws.data.clients) ws.data.clients = [];
+                const currSymbol = (ws.data.settings||{}).currency === 'INR' ? '₹' : '$';
+                App.openCustomModal(`
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                        <h3>Manage Clients</h3>
+                        <button class="icon-btn" onclick="App.closeModal()"><svg class="icon"><use href="#i-close"></use></svg></button>
+                    </div>
+                    <div style="display:flex; flex-direction:column; gap:16px;">
+                        ${ws.data.clients.map(c => `
+                            <div style="display:flex; flex-direction:column; gap:8px; background:var(--bg-secondary); padding:12px; border-radius:8px; border-left: 4px solid ${c.color};">
+                                <input class="input-modern" placeholder="Client Name" value="${Utils.escapeHtml(c.name)}" oninput="ViewRenderer._collabEditClientField('${shareId}','${c.id}','name',this.value)" onchange="App.saveCollabWorkspace('${shareId}')">
+                                <div style="display:flex; gap:8px; align-items:center;">
+                                    <input type="color" value="${c.color}" oninput="ViewRenderer._collabEditClientField('${shareId}','${c.id}','color',this.value)" onchange="App.saveCollabWorkspace('${shareId}')" style="width:40px; height:35px; border:none; background:none; cursor:pointer;">
+                                    <input class="input-modern" placeholder="Company (Optional)" value="${Utils.escapeHtml(c.company || '')}" oninput="ViewRenderer._collabEditClientField('${shareId}','${c.id}','company',this.value)" onchange="App.saveCollabWorkspace('${shareId}')" style="flex:1;">
+                                </div>
+                                <div style="display:flex; gap:8px; align-items:center;">
+                                    <input class="input-modern" placeholder="Email (Optional)" value="${Utils.escapeHtml(c.email || '')}" oninput="ViewRenderer._collabEditClientField('${shareId}','${c.id}','email',this.value)" onchange="App.saveCollabWorkspace('${shareId}')" style="flex:1;">
+                                </div>
+                                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
+                                    <select class="input-modern" onchange="ViewRenderer._collabEditClientField('${shareId}','${c.id}','paymentType',this.value);App.saveCollabWorkspace('${shareId}').then(()=>ViewRenderer.collabManageClientsModal('${shareId}'));">
+                                        <option value="per_video" ${c.paymentType !== 'monthly' ? 'selected' : ''}>Per Video / Project</option>
+                                        <option value="monthly" ${c.paymentType === 'monthly' ? 'selected' : ''}>Monthly Salary</option>
+                                    </select>
+                                    ${c.paymentType === 'monthly' ? `
+                                        <div class="input-group">
+                                            <span class="input-icon">${currSymbol}</span>
+                                            <input type="number" class="input-modern input-with-icon" placeholder="Monthly Salary" value="${c.monthlySalary || 0}" oninput="ViewRenderer._collabEditClientField('${shareId}','${c.id}','monthlySalary',parseFloat(this.value)||0)" onchange="App.saveCollabWorkspace('${shareId}')">
+                                        </div>
+                                    ` : `<div></div>`}
+                                </div>
+                                <button class="btn" style="color:#ef4444; margin-top:4px;" onclick="ViewRenderer.deleteCollabClient('${shareId}','${c.id}')">Delete Client</button>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <button class="btn btn-primary" style="margin-top:16px;" onclick="ViewRenderer.addCollabClient('${shareId}')">+ Add Client Manually</button>
+                `);
             };
 
             ViewRenderer.renderCollabDatabase = function(el, ws) {
