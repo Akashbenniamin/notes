@@ -414,7 +414,7 @@ const U={
 
 /* ── Cloud Sync (Google Drive) ── */
 const Cloud = {
-  CLIENT_ID: 'YOUR_CLIENT_ID.apps.googleusercontent.com',
+  CLIENT_ID: '468949850089-8e836r9h9d9k7onj6upi74eig06or9nk.apps.googleusercontent.com',
   SCOPES: 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.profile',
   DISCOVERY_DOC: 'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest',
   tokenClient: null,
@@ -425,6 +425,12 @@ const Cloud = {
     window.addEventListener('online', () => this.checkStatus());
     window.addEventListener('offline', () => this.checkStatus());
     setInterval(() => this.checkStatus(), 5000);
+    
+    if (this.CLIENT_ID === 'YOUR_CLIENT_ID.apps.googleusercontent.com') {
+      console.warn('Google OAuth Client ID not configured. Please follow the setup guide.');
+      document.getElementById('loginBtn').title = 'Setup required: Add your Google Client ID';
+      return;
+    }
     
     try {
       await new Promise(r => {
@@ -441,7 +447,11 @@ const Cloud = {
         client_id: this.CLIENT_ID,
         scope: this.SCOPES,
         callback: async (resp) => {
-          if (resp.error) return;
+          if (resp.error) {
+            console.error('OAuth Error:', resp.error);
+            U.toast('Login failed. Check console for details.');
+            return;
+          }
           this.accessToken = resp.access_token;
           localStorage.setItem('g_at', this.accessToken);
           await this.loadUserProfile();
@@ -457,35 +467,56 @@ const Cloud = {
         await this.loadUserProfile();
         document.getElementById('syncBtn').style.display = 'inline-flex';
       }
-    } catch (e) { console.error('Cloud Init Error:', e); }
+    } catch (e) { 
+      console.error('Cloud Init Error:', e);
+      U.toast('Cloud setup failed. Check console.');
+    }
   },
 
   async login() {
+    if (this.CLIENT_ID === 'YOUR_CLIENT_ID.apps.googleusercontent.com') {
+      U.toast('⚠️ Setup required: Add your Google Client ID to the code (line 417)');
+      return;
+    }
+    if (!this.tokenClient) {
+      U.toast('Cloud not initialized. Refresh the page.');
+      return;
+    }
     this.tokenClient.requestAccessToken({ prompt: '' });
   },
 
-  async logout() {
-    if (this.accessToken) google.accounts.oauth2.revoke(this.accessToken);
-    this.accessToken = null;
-    localStorage.removeItem('g_at');
-    document.getElementById('loginBtn').style.display = 'inline-flex';
-    document.getElementById('user-info').style.display = 'none';
-    document.getElementById('syncBtn').style.display = 'none';
-    U.toast('Logged out');
-  },
+
 
   async loadUserProfile() {
     try {
       const resp = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
         headers: { Authorization: `Bearer ${this.accessToken}` }
       });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       const user = await resp.json();
       if (user.picture) {
         document.getElementById('user-img').src = user.picture;
         document.getElementById('user-info').style.display = 'flex';
         document.getElementById('loginBtn').style.display = 'none';
+        U.toast(`Welcome, ${user.name || 'User'}!`);
       }
-    } catch (e) { console.error('Profile Load Error:', e); }
+    } catch (e) { 
+      console.error('Profile Load Error:', e);
+    }
+  },
+
+  async logout() {
+    if (this.accessToken) {
+      try {
+        google.accounts.oauth2.revoke(this.accessToken);
+      } catch (e) { console.error('Revoke Error:', e); }
+    }
+    this.accessToken = null;
+    localStorage.removeItem('g_at');
+    document.getElementById('loginBtn').style.display = 'inline-flex';
+    document.getElementById('user-info').style.display = 'none';
+    document.getElementById('syncBtn').style.display = 'none';
+    U.toast('Logged out');
   },
 
   checkStatus() {
@@ -497,6 +528,10 @@ const Cloud = {
   async sync() {
     if (!navigator.onLine) { U.toast('Offline. Cannot sync.'); return; }
     if (!this.accessToken) {
+      if (!this.tokenClient) {
+        U.toast('Cloud not initialized.');
+        return;
+      }
       this.tokenClient.requestAccessToken({ prompt: 'none' });
     } else {
       this.performSync();
@@ -504,6 +539,10 @@ const Cloud = {
   },
 
   async performSync() {
+    if (!this.accessToken) {
+      U.toast('Not logged in. Cannot sync.');
+      return;
+    }
     U.toast('Syncing with Google Drive...');
     try {
       const fileId = await this.getFileId();
@@ -543,7 +582,12 @@ const Cloud = {
       U.toast('Sync Complete: Data Merged');
     } catch (e) {
       console.error('Sync Error:', e);
-      U.toast('Sync Failed. Check Console.');
+      if (e.message.includes('401') || e.message.includes('invalid_client')) {
+        U.toast('⚠️ Auth failed. Please re-login.');
+        this.logout();
+      } else {
+        U.toast('Sync Failed. Check Console.');
+      }
     }
   },
 
@@ -588,46 +632,61 @@ const Cloud = {
   },
 
   async getFileId() {
-    const resp = await gapi.client.drive.files.list({
-      q: "name = 'nexus_workspace_v2.json' and trashed = false",
-      spaces: 'appDataFolder',
-      fields: 'files(id)'
-    });
-    return resp.result.files[0]?.id;
+    try {
+      const resp = await gapi.client.drive.files.list({
+        q: "name = 'nexus_workspace_v2.json' and trashed = false",
+        spaces: 'appDataFolder',
+        fields: 'files(id)'
+      });
+      return resp.result.files[0]?.id;
+    } catch (e) {
+      console.error('Get File ID Error:', e);
+      throw e;
+    }
   },
 
   async getFileContent(id) {
-    const resp = await gapi.client.drive.files.get({ fileId: id, alt: 'media' });
-    return resp.result;
+    try {
+      const resp = await gapi.client.drive.files.get({ fileId: id, alt: 'media' });
+      return resp.result;
+    } catch (e) {
+      console.error('Get File Content Error:', e);
+      throw e;
+    }
   },
 
   async saveToDrive(data) {
-    const fileId = await this.getFileId();
-    const metadata = { name: 'nexus_workspace_v2.json', parents: ['appDataFolder'] };
-    const content = JSON.stringify(data);
-    
-    if (fileId) {
-      await gapi.client.request({
-        path: `/upload/drive/v3/files/${fileId}`,
-        method: 'PATCH',
-        params: { uploadType: 'media' },
-        body: content
-      });
-    } else {
-      const boundary = '-------314159265358979323846';
-      const delimiter = "\r\n--" + boundary + "\r\n";
-      const close_delim = "\r\n--" + boundary + "--";
-      const multipartRequestBody =
-        delimiter + 'Content-Type: application/json\r\n\r\n' + JSON.stringify(metadata) +
-        delimiter + 'Content-Type: application/json\r\n\r\n' + content + close_delim;
+    try {
+      const fileId = await this.getFileId();
+      const metadata = { name: 'nexus_workspace_v2.json', parents: ['appDataFolder'] };
+      const content = JSON.stringify(data);
+      
+      if (fileId) {
+        await gapi.client.request({
+          path: `/upload/drive/v3/files/${fileId}`,
+          method: 'PATCH',
+          params: { uploadType: 'media' },
+          body: content
+        });
+      } else {
+        const boundary = '-------314159265358979323846';
+        const delimiter = "\r\n--" + boundary + "\r\n";
+        const close_delim = "\r\n--" + boundary + "--";
+        const multipartRequestBody =
+          delimiter + 'Content-Type: application/json\r\n\r\n' + JSON.stringify(metadata) +
+          delimiter + 'Content-Type: application/json\r\n\r\n' + content + close_delim;
 
-      await gapi.client.request({
-        path: '/upload/drive/v3/files',
-        method: 'POST',
-        params: { uploadType: 'multipart' },
-        headers: { 'Content-Type': 'multipart/related; boundary="' + boundary + '"' },
-        body: multipartRequestBody
-      });
+        await gapi.client.request({
+          path: '/upload/drive/v3/files',
+          method: 'POST',
+          params: { uploadType: 'multipart' },
+          headers: { 'Content-Type': 'multipart/related; boundary="' + boundary + '"' },
+          body: multipartRequestBody
+        });
+      }
+    } catch (e) {
+      console.error('Save to Drive Error:', e);
+      throw e;
     }
   }
 };
