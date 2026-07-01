@@ -328,10 +328,17 @@ input[type="number"]{-moz-appearance:textfield}
       <input type="text" id="searchInput" placeholder="Search…" autocomplete="off">
     </div>
     <div class="hdr-end">
-      <button class="btn" id="syncBtn" onclick="Cloud.sync()" title="Sync with Cloud">
+      <button class="btn" id="syncBtn" onclick="Cloud.sync()" title="Sync with Cloud" style="display:none">
         <svg class="ic" style="width:16px;height:16px"><use href="#ic-rst"/></svg>
         <span class="nav-lbl">Sync</span>
       </button>
+      <div id="user-profile" style="display:flex;align-items:center;gap:10px">
+        <button class="btn btn-p" id="loginBtn" onclick="Cloud.login()">Login</button>
+        <div id="user-info" style="display:none;align-items:center;gap:8px">
+          <img id="user-img" src="" style="width:32px;height:32px;border-radius:50%;border:1px solid var(--bd)">
+          <button class="ib" onclick="Cloud.logout()" title="Logout"><svg class="ic"><use href="#ic-x"/></svg></button>
+        </div>
+      </div>
     </div>
   </header>
 
@@ -353,7 +360,6 @@ input[type="number"]{-moz-appearance:textfield}
       <div class="nav-item" data-view="kanban" data-tip="Pending Works"><svg class="ic"><use href="#ic-kan"/></svg><span class="nav-lbl">Pending Works</span></div>
       <div class="nav-item" data-view="database" data-tip="Client Database"><svg class="ic"><use href="#ic-db"/></svg><span class="nav-lbl">Client Database</span></div>
       <div class="nav-item" data-view="prompt" data-tip="Prompt Library"><svg class="ic"><use href="#ic-copy"/></svg><span class="nav-lbl">Prompt Library</span></div>
-      <div class="nav-item" data-view="brand" data-tip="Brand Kits"><svg class="ic"><use href="#ic-pal"/></svg><span class="nav-lbl">Brand Kits</span></div>
       <div class="nav-sec">System</div>
       <div class="nav-item" data-view="settings" data-tip="Settings"><svg class="ic"><use href="#ic-cog"/></svg><span class="nav-lbl">Settings</span></div>
     </div>
@@ -371,7 +377,7 @@ input[type="number"]{-moz-appearance:textfield}
   </nav>
 </div>
 
-<div class="fo" id="fo"><div class="fc" id="fc"></div></div>
+<div class="fo" id="fo" style="pointer-events: auto;"><div class="fc" id="fc"></div></div>
 <div class="toast" id="toast"></div>
 <div id="pArea"></div>
 
@@ -409,7 +415,7 @@ const U={
 /* ── Cloud Sync (Google Drive) ── */
 const Cloud = {
   CLIENT_ID: 'YOUR_CLIENT_ID.apps.googleusercontent.com',
-  SCOPES: 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive.file',
+  SCOPES: 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.profile',
   DISCOVERY_DOC: 'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest',
   tokenClient: null,
   accessToken: null,
@@ -420,7 +426,6 @@ const Cloud = {
     window.addEventListener('offline', () => this.checkStatus());
     setInterval(() => this.checkStatus(), 5000);
     
-    // Initialize GAPI and GIS
     try {
       await new Promise(r => {
         const s = document.createElement('script');
@@ -435,13 +440,52 @@ const Cloud = {
       this.tokenClient = google.accounts.oauth2.initTokenClient({
         client_id: this.CLIENT_ID,
         scope: this.SCOPES,
-        callback: (resp) => {
+        callback: async (resp) => {
           if (resp.error) return;
           this.accessToken = resp.access_token;
+          localStorage.setItem('g_at', this.accessToken);
+          await this.loadUserProfile();
+          document.getElementById('syncBtn').style.display = 'inline-flex';
           this.performSync();
         },
       });
+
+      const savedToken = localStorage.getItem('g_at');
+      if (savedToken) {
+        this.accessToken = savedToken;
+        gapi.client.setToken({ access_token: savedToken });
+        await this.loadUserProfile();
+        document.getElementById('syncBtn').style.display = 'inline-flex';
+      }
     } catch (e) { console.error('Cloud Init Error:', e); }
+  },
+
+  async login() {
+    this.tokenClient.requestAccessToken({ prompt: '' });
+  },
+
+  async logout() {
+    if (this.accessToken) google.accounts.oauth2.revoke(this.accessToken);
+    this.accessToken = null;
+    localStorage.removeItem('g_at');
+    document.getElementById('loginBtn').style.display = 'inline-flex';
+    document.getElementById('user-info').style.display = 'none';
+    document.getElementById('syncBtn').style.display = 'none';
+    U.toast('Logged out');
+  },
+
+  async loadUserProfile() {
+    try {
+      const resp = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+        headers: { Authorization: `Bearer ${this.accessToken}` }
+      });
+      const user = await resp.json();
+      if (user.picture) {
+        document.getElementById('user-img').src = user.picture;
+        document.getElementById('user-info').style.display = 'flex';
+        document.getElementById('loginBtn').style.display = 'none';
+      }
+    } catch (e) { console.error('Profile Load Error:', e); }
   },
 
   checkStatus() {
@@ -678,8 +722,8 @@ const App={
     document.querySelectorAll('.nav-item[data-view]').forEach(el=>{el.addEventListener('click',()=>{this.nav(el.dataset.view);});});
     document.querySelectorAll('.bni[data-view]').forEach(el=>{el.addEventListener('click',()=>{this.nav(el.dataset.view);});});
     document.getElementById('searchInput').addEventListener('input',U.dbnc(e=>{this.q=e.target.value.toLowerCase();this.render();},260));
-    document.getElementById('fo').addEventListener('click',e=>{if(e.target.id==='fo')this.close();});
-    document.addEventListener('keydown',e=>{if(e.key==='Escape'&&(this.modOpen||this.focId))this.close();});
+    document.getElementById('fo').addEventListener('click',e=>{if(e.target.id==='fo')this.cancelAndClose();});
+    document.addEventListener('keydown',e=>{if(e.key==='Escape'&&(this.modOpen||this.focId))this.cancelAndClose();});
     document.addEventListener('click',e=>{if(!e.target.closest('.nxdd'))document.querySelectorAll('.nxdm.open').forEach(m=>m.classList.remove('open'));if(!e.target.closest('.nxcal')&&!e.target.closest('[data-cal]'))document.querySelectorAll('.nxcal.open').forEach(c=>c.remove());});
   },
 
@@ -705,8 +749,7 @@ const App={
     try{
       switch(this.currentView){
         case 'dashboard':V.dash(m);break;case 'standard':V.notes(m);break;case 'archive':V.archive(m);break;
-        case 'kanban':V.kanban(m);break;case 'database':V.db(m);break;case 'prompt':V.prompts(m);break;
-        case 'brand':V.brands(m);break;case 'settings':V.settings(m);break;
+                case 'kanban':V.kanban(m);break;case 'database':V.db(m);break;case 'prompt':V.prompts(m);break;case 'settings':V.settings(m);break;
       }
       V.dnd();
     }catch(err){
@@ -715,13 +758,56 @@ const App={
     }
   },
 
-  openNote(id){this.focId=id;this.modOpen=false;document.getElementById('fo').classList.add('act');V.focCard();},
+  openNote(id){
+    const n = this.state.notes.find(x => x.id === id);
+    this._tempNote = JSON.parse(JSON.stringify(n));
+    this.focId=id;this.modOpen=false;document.getElementById('fo').classList.add('act');V.focCard();
+  },
   modal(html){this.focId=null;this.modOpen=true;var c=document.getElementById('fc');c.style.cssText='';c.className='fc';c.innerHTML=html;document.getElementById('fo').classList.add('act');},
-  close(){this.focId=null;this.modOpen=false;document.getElementById('fo').classList.remove('act');this.save();this.render();},
+  close(){
+    if (this.focId) {
+      // If we're closing via click-outside or ESC, we don't save. 
+      // But the current logic uses App.upNote which saves immediately.
+      // To fulfill "separate save button", we should use a temporary state.
+      this.focId=null;
+    }
+    this.modOpen=false;
+    document.getElementById('fo').classList.remove('act');
+    this.render();
+  },
+  saveAndClose(){
+    if (this.focId) {
+      this.save();
+      this.focId=null;
+    }
+    this.modOpen=false;
+    document.getElementById('fo').classList.remove('act');
+    this.render();
+  },
+  cancelAndClose(){
+    if (this.focId && this._tempNote) {
+      const idx = this.state.notes.findIndex(x => x.id === this.focId);
+      if (idx !== -1) {
+        // If it was a brand new note that wasn't saved, we might want to remove it.
+        // But for simplicity, we just revert.
+        this.state.notes[idx] = this._tempNote;
+      }
+    }
+    this.focId=null;
+    this.modOpen=false;
+    document.getElementById('fo').classList.remove('act');
+    this.render();
+  },
 
   addNote(type,data={}){
     var n={id:U.uid(),type,title:'',content:'',created:Date.now(),lastModified:Date.now(),pinned:false,archived:false,bgColor:'default',...data};
-    if(type==='kanban'){n.status=n.status||'Pending';n.order=n.order||Date.now();n.videos=n.videos!==undefined?n.videos:1;n.price=n.price||0;n.pricingType=n.pricingType||'total';n.receivedDate=n.receivedDate||Date.now();}
+    if(type==='kanban'){
+      const lastTask = this.state.notes.find(x => x.type === 'kanban');
+      n.status=n.status||'Pending';n.order=n.order||Date.now();n.videos=n.videos!==undefined?n.videos:1;
+      n.price=lastTask ? lastTask.price : 0;
+      n.pricingType=lastTask ? lastTask.pricingType : 'total';
+      n.receivedDate=n.receivedDate||Date.now();
+    }
     if(type==='standard'&&n.isChecklist)n.items=n.items||[];
     this.state.notes.unshift(n);this.save();return n;
   },
@@ -729,8 +815,15 @@ const App={
   handleClient(nid,name){
     if(!name){this.upNote(nid,'clientId','');return;}
     var cl=this.state.clients.find(c=>c.name.toLowerCase()===name.toLowerCase());
-    if(!cl){var cols=['#ef4444','#f59e0b','#10b981','#3b82f6','#6366f1','#8b5cf6','#ec4899'];cl={id:U.uid(),name,color:cols[this.state.clients.length%cols.length],email:'',company:'',paymentType:'per_video',monthlySalary:0,lastModified:Date.now()};this.state.clients.push(cl);this.save();U.toast(`Client "${name}" created`);}
+    if(!cl){
+      var cols=['#ef4444','#f59e0b','#10b981','#3b82f6','#6366f1','#8b5cf6','#ec4899'];
+      cl={id:U.uid(),name,color:cols[this.state.clients.length%cols.length],email:'',company:'',paymentType:'per_video',monthlySalary:0,lastModified:Date.now()};
+      this.state.clients.push(cl);
+      this.save();
+      U.toast(`Client "${name}" created`);
+    }
     this.upNote(nid,'clientId',cl.id);
+    V.focCard(); // Refresh UI to unlock fields
   },
   upNote(id,k,v){var n=this.state.notes.find(n=>n.id===id);if(n){n[k]=v;n.lastModified=Date.now();this.save();}},
   togglePin(id){var n=this.state.notes.find(n=>n.id===id);if(n){n.pinned=!n.pinned;n.lastModified=Date.now();this.save();if(this.focId===id)V.focCard();else this.render();}},
@@ -805,7 +898,7 @@ const V={
   kanban(m){
     var tasks=this.fil('kanban').sort((a,b)=>(a.order||0)-(b.order||0)),cols=['Pending','In Progress','Revision','Completed'];
     m.innerHTML=`<div class="view-hdr"><h1>Pending Works</h1><div style="display:flex;gap:7px;flex-wrap:wrap"><button class="btn" onclick="V.manClients()">Manage Clients</button><button class="btn btn-p" onclick="App.openNote(App.addNote('kanban').id)">+ New Task</button></div></div>
-      <div class="kb">${cols.map(col=>`<div class="kc" data-status="${col}"><div class="kch">${col} <span style="color:var(--tx2);font-weight:normal">${tasks.filter(t=>t.status===col).length}</span></div><div class="kcs" data-status="${col}">${tasks.filter(t=>t.status===col).map(t=>this.kcard(t)).join('')}</div></div>`).join('')}</div>`;
+      <div class="kb">${cols.map(col=>`<div class="kc" data-status="${col}" ondblclick="if(event.target===this || event.target.classList.contains('kcs')) App.openNote(App.addNote('kanban', {status:'${col}'}).id)"><div class="kch">${col} <span style="color:var(--tx2);font-weight:normal">${tasks.filter(t=>t.status===col).length}</span></div><div class="kcs" data-status="${col}">${tasks.filter(t=>t.status===col).map(t=>this.kcard(t)).join('')}</div></div>`).join('')}</div>`;
     this.kDnD();
   },
 
@@ -858,17 +951,7 @@ const V={
       </div>`).join('')}</div>`;
   },
 
-  brands(m){
-    var bs=this.fil('brand');
-    m.innerHTML=`<div class="view-hdr"><h1>Brand Kits</h1><button class="btn btn-p" onclick="App.openNote(App.addNote('brand',{colors:['#6366f1','#000','#fff','#f59e0b','#10b981'],headingFont:'Inter',bodyFont:'Roboto'}).id)">+ New Kit</button></div>
-      <div class="ng">${bs.map(b=>`<div class="card" onclick="App.openNote('${b.id}')" data-id="${b.id}" draggable="true" style="padding:0;cursor:pointer">
-        <div style="padding:13px;background:${b.colors[0]||'#ccc'};min-height:65px;display:flex;align-items:center;justify-content:center;border-radius:var(--radius) var(--radius) 0 0">
-          <h3 style="margin:0;font-family:${b.headingFont};color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.4)">${U.esc(b.title)||'Brand'}</h3>
-        </div>
-        <div style="padding:12px;display:flex;flex-direction:column;gap:6px">${(b.colors||[]).slice(0,5).map(c=>`<div style="display:flex;align-items:center;gap:8px"><div style="width:28px;height:28px;border-radius:5px;background:${c};border:1px solid var(--bd)"></div><span style="font-family:monospace;font-size:.76rem">${c.toUpperCase()}</span></div>`).join('')}</div>
-        <div style="padding:0 12px 11px;font-size:.8rem;color:var(--tx2);border-top:1px solid var(--bd);padding-top:9px"><div style="font-family:${b.headingFont}">Heading: ${b.headingFont||'—'}</div><div style="font-family:${b.bodyFont}">Body: ${b.bodyFont||'—'}</div></div>
-      </div>`).join('')}</div>`;
-  },
+
 
   settings(m){
     var s=App.state.settings;
@@ -902,21 +985,22 @@ const V={
     var flds='',cont='';
     if(n.type==='kanban'){
       var cs=App.state.settings.currency==='INR'?'₹':'$',cl=App.state.clients.find(c=>c.id===n.clientId),isM=cl?.paymentType==='monthly';
+      var disabled = !n.clientId ? 'disabled style="opacity:0.5"' : '';
       flds=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
         <div class="nxdd" id="kSt"><div class="nxdt" onclick="V.dd('kStM',this)"><span>${n.status||'Pending'}</span><svg class="ic" style="width:12px;height:12px"><use href="#ic-chev"/></svg></div></div>
-        <div class="ig"><input class="inp" list="cL" placeholder="Client" value="${cl?.name||''}" onchange="App.handleClient('${n.id}',this.value)"><datalist id="cL">${App.state.clients.map(c=>`<option value="${c.name}">`).join('')}</datalist></div>
+        <div class="ig"><input class="inp" list="cL" placeholder="Select Client (Mandatory)" value="${cl?.name||''}" onchange="App.handleClient('${n.id}',this.value)"><datalist id="cL">${App.state.clients.map(c=>`<option value="${c.name}">`).join('')}</datalist></div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
-        <div class="ig"><span class="ii"><svg class="ic" style="width:12px;height:12px"><use href="#ic-vid"/></svg></span><input type="number" class="inp iwi" placeholder="Videos" value="${n.videos||0}" oninput="App.upNote('${n.id}','videos',parseInt(this.value)||0)"></div>
-        <div class="ig"><span class="ii">${cs}</span><input type="number" class="inp iwi" placeholder="Price" value="${n.price||0}" oninput="App.upNote('${n.id}','price',parseFloat(this.value)||0)" ${isM?'disabled':''}></div>
-        <div class="nxdd" id="kPr"><div class="nxdt" onclick="V.dd('kPrM',this)" style="${isM?'opacity:.5;pointer-events:none':''}"><span>${n.pricingType==='per_video'?'Per Video':'Total'}</span><svg class="ic" style="width:12px;height:12px"><use href="#ic-chev"/></svg></div></div>
+        <div class="ig"><span class="ii"><svg class="ic" style="width:12px;height:12px"><use href="#ic-vid"/></svg></span><input type="number" class="inp iwi" placeholder="Videos" value="${n.videos||0}" oninput="App.upNote('${n.id}','videos',parseInt(this.value)||0)" ${disabled}></div>
+        <div class="ig"><span class="ii">${cs}</span><input type="number" class="inp iwi" placeholder="Price" value="${n.price||0}" oninput="App.upNote('${n.id}','price',parseFloat(this.value)||0)" ${isM || !n.clientId ? 'disabled style="opacity:0.5"' : ''}></div>
+        <div class="nxdd" id="kPr"><div class="nxdt" onclick="V.dd('kPrM',this)" style="${isM || !n.clientId ? 'opacity:.5;pointer-events:none' : ''}"><span>${n.pricingType==='per_video'?'Per Video':'Total'}</span><svg class="ic" style="width:12px;height:12px"><use href="#ic-chev"/></svg></div></div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-        <button class="btn" style="justify-content:flex-start;font-size:.82rem" data-cal onclick="V.noteCal(event,'${n.id}','receivedDate')"><svg class="ic" style="width:12px;height:12px;margin-right:3px"><use href="#ic-cal"/></svg>Recv: ${U.fmtDate(n.receivedDate)}</button>
-        <button class="btn" style="justify-content:flex-start;font-size:.82rem" ${n.status!=='Completed'?'disabled':''} data-cal onclick="${n.status==='Completed'?`V.noteCal(event,'${n.id}','completedDate')`:`U.toast('Mark as Completed first')`}"><svg class="ic" style="width:12px;height:12px;margin-right:3px"><use href="#ic-cal"/></svg>Done: ${U.fmtDate(n.completedDate)}</button>
+        <button class="btn" style="justify-content:flex-start;font-size:.82rem" data-cal onclick="V.noteCal(event,'${n.id}','receivedDate')" ${disabled}><svg class="ic" style="width:12px;height:12px;margin-right:3px"><use href="#ic-cal"/></svg>Recv: ${U.fmtDate(n.receivedDate)}</button>
+        <button class="btn" style="justify-content:flex-start;font-size:.82rem" ${n.status!=='Completed' || !n.clientId ? 'disabled style="opacity:0.5"' : ''} data-cal onclick="${n.status==='Completed'?`V.noteCal(event,'${n.id}','completedDate')`:`U.toast('Mark as Completed first')`}"><svg class="ic" style="width:12px;height:12px;margin-right:3px"><use href="#ic-cal"/></svg>Done: ${U.fmtDate(n.completedDate)}</button>
       </div>`;
       setTimeout(()=>{if(document.getElementById('kSt')){document.getElementById('kSt').insertAdjacentHTML('beforeend',`<div class="nxdm" id="kStM">${['Pending','In Progress','Revision','Completed'].map(s=>`<div class="nxdi" onclick="App.setStatus('${n.id}','${s}');V.focCard()">${s}</div>`).join('')}</div>`);document.getElementById('kPr').insertAdjacentHTML('beforeend',`<div class="nxdm" id="kPrM"><div class="nxdi" onclick="App.upNote('${n.id}','pricingType','total');V.focCard()">Total</div><div class="nxdi" onclick="App.upNote('${n.id}','pricingType','per_video');V.focCard()">Per Video</div></div>`);}},0);
-      cont=`<div class="ec" contenteditable="true" oninput="App.upNote('${n.id}','content',this.innerHTML)">${n.content||''}</div>`;
+      cont=`<div class="ec" contenteditable="true" oninput="App.upNote('${n.id}','content',this.innerHTML)" ${disabled}>${n.content||''}</div>`;
     } else if(n.isChecklist){
       cont=`<div style="margin-top:8px">${n.items.map((it,i)=>`<div class="cli"><input type="checkbox" class="nxc" ${it.done?'checked':''} onchange="App.togCLI('${n.id}',${i},this.checked)"><input class="clt ${it.done?'done':''}" value="${U.esc(it.text)}" oninput="App.updCLI('${n.id}',${i},this.value)" placeholder="Item"><button class="ib" style="color:#ef4444" onclick="App.delCLI('${n.id}',${i})"><svg class="ic" style="width:13px;height:13px"><use href="#ic-tr"/></svg></button></div>`).join('')}<button class="btn" onclick="App.addCLI('${n.id}')" style="margin-top:5px">+ Add Item</button></div>`;
     } else if(n.type==='prompt'){
@@ -934,7 +1018,7 @@ const V={
     card.innerHTML=`
       <div style="display:flex;justify-content:space-between;align-items:center">
         <input class="et" placeholder="Title" value="${U.esc(n.title)}" oninput="App.upNote('${n.id}','title',this.value)" style="color:${tc}">
-        <div style="display:flex;gap:2px"><button class="ib" onclick="App.togglePin('${n.id}')" style="color:${tc}"><svg class="ic" style="${n.pinned?'fill:currentColor':''}"><use href="#ic-pin"/></svg></button><button class="ib" onclick="App.close()" style="color:${tc}"><svg class="ic"><use href="#ic-x"/></svg></button></div>
+        <div style="display:flex;gap:2px"><button class="ib" onclick="App.togglePin('${n.id}')" style="color:${tc}"><svg class="ic" style="${n.pinned?'fill:currentColor':''}"><use href="#ic-pin"/></svg></button><button class="ib" onclick="App.cancelAndClose()" style="color:${tc}"><svg class="ic"><use href="#ic-x"/></svg></button></div>
       </div>
       ${flds}${cont}
       <div class="etb" style="border-color:rgba(128,128,128,.22)">
@@ -942,7 +1026,10 @@ const V={
           ${n.type==='standard'&&!n.isChecklist?`<button class="ib" onclick="App.toggleCPal()" style="color:${tc}"><svg class="ic"><use href="#ic-pal"/></svg></button><button class="ib" onclick="App.toggleFmt()" style="color:${tc}"><svg class="ic"><use href="#ic-bold"/></svg></button>`:''}
           ${n.type!=='kanban'?`<button class="ib" onclick="App.archiveNote('${n.id}')" style="color:${tc}"><svg class="ic"><use href="#ic-arc"/></svg></button>`:''}
         </div>
-        <button class="btn" style="color:#ef4444;border-color:rgba(128,128,128,.22)" onclick="App.delNote('${n.id}')">Delete</button>
+        <div style="display:flex;gap:8px">
+          <button class="btn" style="color:#ef4444;border-color:rgba(128,128,128,.22)" onclick="App.delNote('${n.id}')">Delete</button>
+          <button class="btn btn-p" onclick="App.saveAndClose()">Save</button>
+        </div>
       </div>
       ${n.type==='standard'&&!n.isChecklist?`
         <div class="cpp" id="cpp">${['default','yellow','blue','pink','green','orange'].map(c=>`<div class="cdot" style="background:var(--nc-${c.substring(0,3)})" onclick="App.setBg('${n.id}','${c}')"></div>`).join('')}</div>
