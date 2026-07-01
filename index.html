@@ -255,6 +255,10 @@ input[type="number"]{-moz-appearance:textfield}
   .kcs{max-height:340px}
   .fc{max-width:100%;max-height:92vh;padding:16px;border-radius: 16px 16px 0 0;bottom: 0;position: fixed; left: 0; right: 0; animation: slideUp 0.3s ease-out;}
   @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+  #sbt { display: none !important; }
+  #mbt { display: flex !important; }
+  .app.sc aside { transform: translateX(-100%); width: 0; }
+  .app:not(.sc) aside { transform: translateX(0); width: 240px; position: fixed; height: 100%; z-index: 1000; box-shadow: 20px 0 50px rgba(0,0,0,0.3); }
   .hdr-end .ib{display:none}
   .view-hdr{flex-direction:row;justify-content: space-between;align-items:center; gap: 10px; margin-bottom: 15px;}
   .view-hdr h1 { font-size: 1.2rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -276,7 +280,7 @@ input[type="number"]{-moz-appearance:textfield}
   #syncBtn span { display: none; }
   #syncBtn { padding: 8px; border-radius: 50%; }
 }
-@media(min-width:769px){.bnav{display:none}}
+@media(min-width:769px){.bnav{display:none} #sbt { display: flex !important; } }
 </style>
 </head>
 <body>
@@ -319,9 +323,10 @@ input[type="number"]{-moz-appearance:textfield}
 
 <div class="app" id="app">
   <header>
-    <button class="sb-toggle" id="sbt" title="Toggle sidebar">
+    <button class="sb-toggle" id="sbt" title="Toggle sidebar" style="display:none">
       <svg class="ic" id="sbi"><use href="#ic-cl"/></svg>
     </button>
+    <button class="ib" id="mbt" style="display:none"><svg class="ic"><use href="#ic-menu"/></svg></button>
     <span class="logo">Nexus</span>
     <div class="search-bar">
       <svg class="ic"><use href="#ic-search"/></svg>
@@ -778,6 +783,7 @@ const App={
 
   bindEvents(){
     document.getElementById('sbt').addEventListener('click',()=>{this.sc=!this.sc;localStorage.setItem('nsc',this.sc?'1':'0');this.applySC();});
+    document.getElementById('mbt').addEventListener('click',()=>{this.sc=!this.sc;this.applySC();});
     document.querySelectorAll('.nav-item[data-view]').forEach(el=>{el.addEventListener('click',()=>{this.nav(el.dataset.view);});});
     document.querySelectorAll('.bni[data-view]').forEach(el=>{el.addEventListener('click',()=>{this.nav(el.dataset.view);});});
     document.getElementById('searchInput').addEventListener('input',U.dbnc(e=>{this.q=e.target.value.toLowerCase();this.render();},260));
