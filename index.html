@@ -928,12 +928,22 @@ const V={
       <div class="nxdd" style="width:130px" id="ddF"><div class="nxdt" onclick="V.dd('ddFm',this)"><span>${f==='all_time'?'All Time':'This Month'}</span><svg class="ic" style="width:13px;height:13px"><use href="#ic-chev"/></svg></div>
       <div class="nxdm" id="ddFm"><div class="nxdi" onclick="App.state.dashFilter='all_time';App.render()">All Time</div><div class="nxdi" onclick="App.state.dashFilter='this_month';App.render()">This Month</div></div></div></div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:18px 0">
-        <div class="card" style="border-left:4px solid #f59e0b"><div style="color:var(--tx2);font-size:.75rem;text-transform:uppercase">Pending Videos</div><div style="font-size:1.9rem;font-weight:bold">${stats.pv}</div></div>
-        <div class="card" style="border-left:4px solid #10b981"><div style="color:var(--tx2);font-size:.75rem;text-transform:uppercase">Completed</div><div style="font-size:1.9rem;font-weight:bold">${stats.cv}</div></div>
-        <div class="card" style="border-left:4px solid #6366f1"><div style="color:var(--tx2);font-size:.75rem;text-transform:uppercase">Earned</div><div style="font-size:1.9rem;font-weight:bold">${U.cur(stats.earned)}</div></div>
-        <div class="card" style="border-left:4px solid #ef4444"><div style="color:var(--tx2);font-size:.75rem;text-transform:uppercase">Pending Amount</div><div style="font-size:1.9rem;font-weight:bold">${U.cur(stats.pending)}</div></div>
+        <div class="card" style="border-left:4px solid #f59e0b" onclick="V.showSum('Pending Videos', '${stats.pv} Videos', '#f59e0b')"><div style="color:var(--tx2);font-size:.75rem;text-transform:uppercase">Pending Videos</div><div style="font-size:1.9rem;font-weight:bold">${stats.pv}</div></div>
+        <div class="card" style="border-left:4px solid #10b981" onclick="V.showSum('Completed', '${stats.cv} Deliveries', '#10b981')"><div style="color:var(--tx2);font-size:.75rem;text-transform:uppercase">Completed</div><div style="font-size:1.9rem;font-weight:bold">${stats.cv}</div></div>
+        <div class="card" style="border-left:4px solid #6366f1" onclick="V.showSum('Earned', '${U.cur(stats.earned)}', '#6366f1')"><div style="color:var(--tx2);font-size:.75rem;text-transform:uppercase">Earned</div><div style="font-size:1.9rem;font-weight:bold">${U.cur(stats.earned)}</div></div>
+        <div class="card" style="border-left:4px solid #ef4444" onclick="V.showSum('Pending Amount', '${U.cur(stats.pending)}', '#ef4444')"><div style="color:var(--tx2);font-size:.75rem;text-transform:uppercase">Pending Amount</div><div style="font-size:1.9rem;font-weight:bold">${U.cur(stats.pending)}</div></div>
+      </div>`;
+  },
+  showSum(title, val, col) {
+    App.modal(\`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px"><h3>\${title}</h3><button class="ib" onclick="App.close()"><svg class="ic"><use href="#ic-x"/></svg></button></div>
+      <div style="background:var(--bg2);padding:24px;border-radius:16px;text-align:center;margin-bottom:15px;border-top:4px solid \${col}">
+        <div style="font-size:2.8rem;font-weight:bold;color:\${col}">\${val}</div>
+        <div style="font-size:.9rem;color:var(--tx2);margin-top:8px">Period: \${App.state.dashFilter === 'all_time' ? 'All Time' : 'Current Month'}</div>
       </div>
-      <h2>Recent</h2>
+      <p style="font-size:.88rem;color:var(--tx2);line-height:1.6;text-align:center">This summary represents your current productivity and earnings in the active workspace. Keep pushing forward!</p>\`);
+  },
+  addRecent(m) {
+    m.innerHTML += `<h2>Recent</h2>
       <div class="ng">${this.cards(App.state.notes.filter(n=>!n.archived&&(n.type==='standard'||n.type==='kanban')).slice(0,8))}</div>`;
   },
 
@@ -992,7 +1002,12 @@ const V={
       return{...c,tv:ct.reduce((s,t)=>s+(t.videos||0),0),cr,pr,last:ct.filter(t=>t.completedDate).sort((a,b)=>b.completedDate-a.completedDate)[0]?.completedDate||null};
     }).filter(c=>c.tv>0||c.cr>0||c.pr>0);
     var sd=f.startDate?new Date(f.startDate).toLocaleDateString():'N/A',ed=f.endDate?new Date(f.endDate).toLocaleDateString():'N/A';
-    m.innerHTML=`<div class="view-hdr"><h1>Client Database</h1><div style="display:flex;gap:7px;flex-wrap:wrap"><button class="btn" onclick="U.dl('clients.csv',V.csv(),'text/csv')">CSV</button><button class="btn" onclick="V.pdf()">PDF</button></div></div>
+    m.innerHTML=`<div class="view-hdr"><h1>Client Database</h1><div style="display:flex;gap:7px;flex-wrap:wrap">
+        <button class="btn" onclick="V.manClients()">Clients</button>
+        <button class="btn" onclick="U.export('png')">PNG</button>
+        <button class="btn" onclick="U.export('pdf')">PDF</button>
+        <button class="btn btn-p" onclick="U.dl('clients.csv',V.csv(),'text/csv')">CSV</button>
+      </div></div>
       <div class="dbf">
         <input type="text" class="inp" placeholder="Search…" value="${f.text||''}" oninput="App.dbF.text=this.value.toLowerCase();App.render()" style="flex:1;min-width:90px">
         <div class="nxdd" style="width:130px"><div class="nxdt" onclick="V.dd('dbCM',this)"><span>${App.state.clients.find(c=>c.id===f.client)?.name||'All Clients'}</span><svg class="ic" style="width:13px;height:13px"><use href="#ic-chev"/></svg></div><div class="nxdm" id="dbCM"><div class="nxdi" onclick="App.dbF.client='';App.render()">All Clients</div>${App.state.clients.map(c=>`<div class="nxdi" onclick="App.dbF.client='${c.id}';App.render()">${c.name}</div>`).join('')}</div></div>
