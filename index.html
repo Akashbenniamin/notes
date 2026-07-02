@@ -257,7 +257,7 @@ input[type="number"]{-moz-appearance:textfield}
 @media(max-width:768px){
   :root{--hh:50px}
   .app{grid-template-columns:1fr!important;grid-template-rows:var(--hh) 1fr 60px;grid-template-areas:"hdr""main""bnav"}
-  aside{position:fixed;top:0;left:0;bottom:0;width:250px;z-index:1500;transform:translateX(-100%);transition:transform .25s ease;background:var(--bg2);backdrop-filter:none!important;-webkit-backdrop-filter:none!important;box-shadow:none}
+  aside{position:fixed;top:0;left:0;bottom:0;width:250px;z-index:1500;transform:translateX(-100%);transition:transform .25s ease;background:var(--bg);backdrop-filter:none!important;-webkit-backdrop-filter:none!important;box-shadow:none;border-right:1px solid var(--bd)}
   .app.mnav aside{transform:translateX(0);box-shadow:20px 0 40px rgba(0,0,0,.35)}
   #mnavScrim{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:1400}
   .app.mnav #mnavScrim{display:block}
@@ -414,13 +414,13 @@ input[type="number"]{-moz-appearance:textfield}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer></script>
 
 <script>
-function NexusReset(){localStorage.clear();var done=false;function go(){if(!done){done=true;location.href=location.pathname;}}try{var r=indexedDB.open('NexusV2',1);r.onsuccess=function(e){try{var db=e.target.result,tx=db.transaction('s','readwrite');tx.objectStore('s').clear();tx.oncomplete=go;tx.onerror=go;}catch(ex){go();}};r.onerror=go;setTimeout(go,2000);}catch(e){go();}}
+function NexusReset(){localStorage.clear();location.href=location.pathname;}
 (function wd(){var b=document.getElementById('er'),m=document.getElementById('main');if(b&&m&&!m.innerHTML.trim()&&b.style.display!=='block')b.style.display='block';setTimeout(wd,2600);})();
 </script>
 
 <script>
 /* ── DB ── */
-const DB={db:null,async init(){return new Promise(r=>{var q=indexedDB.open('NexusV2',1);q.onupgradeneeded=e=>{var db=e.target.result;if(!db.objectStoreNames.contains('s'))db.createObjectStore('s',{keyPath:'k'});};q.onsuccess=e=>{this.db=e.target.result;r();};q.onerror=()=>r();});},async get(k){return new Promise(r=>{if(!this.db)return r(null);var q=this.db.transaction('s','readonly').objectStore('s').get(k);q.onsuccess=()=>r(q.result?q.result.v:null);q.onerror=()=>r(null);});},async set(k,v){return new Promise(r=>{if(!this.db)return r();var tx=this.db.transaction('s','readwrite');tx.objectStore('s').put({k,v});tx.oncomplete=r;tx.onerror=r;});}};
+/* Local persistence removed intentionally — Google Drive (appDataFolder) is the single source of truth. Nothing is cached offline. */
 
 /* ── Utils ── */
 const U={
@@ -450,24 +450,28 @@ const Cloud = {
     window.addEventListener('online', () => this.checkStatus());
     window.addEventListener('offline', () => this.checkStatus());
     setInterval(() => this.checkStatus(), 5000);
-    
+
     if (this.CLIENT_ID === 'YOUR_CLIENT_ID.apps.googleusercontent.com') {
       console.warn('Google OAuth Client ID not configured. Please follow the setup guide.');
       document.getElementById('loginBtn').title = 'Setup required: Add your Google Client ID';
+      App.showLoginGate();
       return;
     }
-    
+
     try {
-      await new Promise(r => {
+      await this.withTimeout(new Promise((res,rej) => {
         const s = document.createElement('script');
         s.src = 'https://apis.google.com/js/api.js';
+        s.onerror = () => rej(new Error('apis.google.com blocked or unreachable'));
         s.onload = () => gapi.load('client', async () => {
-          await gapi.client.init({ discoveryDocs: [this.DISCOVERY_DOC] });
-          r();
+          try { await gapi.client.init({ discoveryDocs: [this.DISCOVERY_DOC] }); res(); }
+          catch(e){ rej(e); }
         });
         document.head.appendChild(s);
-      });
-      
+      }), 7000, 'Google API script load timed out');
+
+      await this.withTimeout(this.waitForGIS(), 7000, 'Google Identity script timed out');
+
       this.tokenClient = google.accounts.oauth2.initTokenClient({
         client_id: this.CLIENT_ID,
         scope: this.SCOPES,
@@ -481,7 +485,7 @@ const Cloud = {
           localStorage.setItem('g_at', this.accessToken);
           await this.loadUserProfile();
           document.getElementById('syncBtn').style.display = 'inline-flex';
-          this.performSync();
+          await App.startApp();
         },
       });
 
@@ -489,18 +493,43 @@ const Cloud = {
       if (savedToken) {
         this.accessToken = savedToken;
         gapi.client.setToken({ access_token: savedToken });
-        await this.loadUserProfile();
-        document.getElementById('syncBtn').style.display = 'inline-flex';
+        try {
+          await this.loadUserProfile();
+          document.getElementById('syncBtn').style.display = 'inline-flex';
+          await App.startApp();
+        } catch (e) {
+          this.logout();
+          App.showLoginGate();
+        }
+      } else {
+        App.showLoginGate();
       }
-    } catch (e) { 
+    } catch (e) {
       console.error('Cloud Init Error:', e);
-      U.toast('Cloud setup failed. Check console.');
+      U.toast('Could not reach Google — check your ad-blocker/shields, then retry.');
+      App.showLoginGate();
     }
+  },
+
+  withTimeout(promise, ms, msg){
+    return Promise.race([
+      promise,
+      new Promise((_,rej)=>setTimeout(()=>rej(new Error(msg||'Timed out')), ms))
+    ]);
+  },
+  waitForGIS(){
+    return new Promise((res,rej)=>{
+      var tries=0;
+      var t=setInterval(()=>{
+        if(window.google && google.accounts && google.accounts.oauth2){clearInterval(t);res();}
+        else if(++tries>70){clearInterval(t);rej(new Error('Google Identity script never loaded'));}
+      },100);
+    });
   },
 
   async login() {
     if (this.CLIENT_ID === 'YOUR_CLIENT_ID.apps.googleusercontent.com') {
-      U.toast('⚠️ Setup required: Add your Google Client ID to the code (line 417)');
+      U.toast('⚠️ Setup required: Add your Google Client ID to the code');
       return;
     }
     if (!this.tokenClient) {
@@ -513,24 +542,21 @@ const Cloud = {
 
 
   async loadUserProfile() {
-    try {
-      const resp = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-        headers: { Authorization: `Bearer ${this.accessToken}` }
-      });
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      const user = await resp.json();
-      if (user.picture) {
-        document.getElementById('user-img').src = user.picture;
-        document.getElementById('user-info').style.display = 'flex';
-        document.getElementById('loginBtn').style.display = 'none';
-        U.toast(`Welcome, ${user.name || 'User'}!`);
-      }
-    } catch (e) { 
-      console.error('Profile Load Error:', e);
+    const resp = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+      headers: { Authorization: `Bearer ${this.accessToken}` }
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const user = await resp.json();
+    if (user.picture) {
+      document.getElementById('user-img').src = user.picture;
+      document.getElementById('user-info').style.display = 'flex';
+      document.getElementById('loginBtn').style.display = 'none';
     }
+    return user;
   },
 
   async logout() {
+    if (this.pollTimer) { clearInterval(this.pollTimer); this.pollTimer = null; }
     if (this.accessToken) {
       try {
         google.accounts.oauth2.revoke(this.accessToken);
@@ -541,7 +567,7 @@ const Cloud = {
     document.getElementById('loginBtn').style.display = 'inline-flex';
     document.getElementById('user-info').style.display = 'none';
     document.getElementById('syncBtn').style.display = 'none';
-    U.toast('Logged out');
+    location.reload();
   },
 
   checkStatus() {
@@ -552,87 +578,76 @@ const Cloud = {
 
   async sync() {
     if (!navigator.onLine) { U.toast('Offline. Cannot sync.'); return; }
-    if (!this.accessToken) {
-      if (!this.tokenClient) {
-        U.toast('Cloud not initialized.');
-        return;
-      }
-      this.tokenClient.requestAccessToken({ prompt: 'none' });
-    } else {
-      this.performSync();
-    }
+    if (!this.accessToken) { U.toast('Not logged in.'); return; }
+    await this.syncCycle(true);
   },
 
-  async performSync() {
-    if (!this.accessToken) {
-      U.toast('Not logged in. Cannot sync.');
-      return;
-    }
-    U.toast('Syncing with Google Drive...');
-    try {
-      const fileId = await this.getFileId();
-      const remoteData = fileId ? await this.getFileContent(fileId) : null;
-      
-      // Load all local workspaces
-      const wsList = await DB.get('wsList') || [];
-      const allLocalData = {};
-      for (const ws of wsList) {
-        allLocalData[ws.id] = await DB.get('wsData_' + ws.id);
-      }
-      
-      const localPackage = { wsList, data: allLocalData, lastModified: Date.now() };
+  // Called every 2s: pull remote, merge with in-memory state, push back if local changed something remote didn't have.
+  startPolling(){
+    if (this.pollTimer) clearInterval(this.pollTimer);
+    this.pollTimer = setInterval(() => { if(navigator.onLine && this.accessToken && !this._busy) this.syncCycle(false); }, 2000);
+  },
 
-      if (!remoteData) {
-        await this.saveToDrive(localPackage);
-        U.toast('First time sync: Data uploaded');
+  async syncCycle(announce){
+    if (!navigator.onLine || !this.accessToken) return;
+    this._busy = true;
+    try {
+      if (announce) U.toast('Syncing…');
+      const fileId = await this.getFileId();
+      const remote = fileId ? await this.getFileContent(fileId) : null;
+      const localPkg = WS.buildPackage();
+
+      if (!remote) {
+        await this.saveToDrive(localPkg);
+        if (announce) U.toast('Synced');
+        this._busy = false;
         return;
       }
 
-      // Robust Merge Logic
-      const merged = this.merge(localPackage, remoteData);
-      
-      // Save merged data back to local DB
-      await DB.set('wsList', merged.wsList);
-      for (const id in merged.data) {
-        await DB.set('wsData_' + id, merged.data[id]);
-      }
-      
-      // Save merged data back to Drive
-      await this.saveToDrive(merged);
-      
-      // Reload current workspace
-      await WS.init();
-      await WS.loadActive();
-      App.render();
-      U.toast('Sync Complete: Data Merged');
+      const merged = this.merge(localPkg, remote);
+      const changed = JSON.stringify(merged) !== JSON.stringify(remote);
+      WS.applyPackage(merged);
+      if (changed) await this.saveToDrive(merged);
+      if (announce) U.toast('Synced');
     } catch (e) {
       console.error('Sync Error:', e);
-      if (e.message.includes('401') || e.message.includes('invalid_client')) {
-        U.toast('⚠️ Auth failed. Please re-login.');
+      if (e.message && (e.message.includes('401') || e.message.includes('invalid_client'))) {
+        U.toast('⚠️ Session expired. Please log in again.');
         this.logout();
-      } else {
-        U.toast('Sync Failed. Check Console.');
+      } else if (announce) {
+        U.toast('Sync failed. Check console.');
       }
     }
+    this._busy = false;
+  },
+
+  pushDebounced: U.dbnc(function(){ Cloud.pushNow(); }, 700),
+
+  // Push local state to Drive immediately (debounced from App.save / WS mutations)
+  async pushNow(){
+    if (!navigator.onLine || !this.accessToken) return;
+    try { await this.saveToDrive(WS.buildPackage()); }
+    catch(e){ console.error('Push Error:', e); }
   },
 
   // Conflict Resolution: Item-level timestamp comparison
   merge(local, remote) {
-    const result = { wsList: [], data: {}, lastModified: Math.max(local.lastModified, remote.lastModified) };
-    
-    // 1. Merge Workspace List
-    const allWs = [...local.wsList];
-    remote.wsList.forEach(rw => {
-      if (!allWs.find(lw => lw.id === rw.id)) allWs.push(rw);
+    const result = { data: {}, lastModified: Math.max(local.lastModified||0, remote.lastModified||0) };
+
+    // 1. Merge Workspace List (by id, keep most-recently-modified version of each; supports rename/color/delete tombstones)
+    const wsMap = new Map();
+    [...(local.wsList||[]), ...(remote.wsList||[])].forEach(w => {
+      const existing = wsMap.get(w.id);
+      if (!existing || (w.lastModified||0) > (existing.lastModified||0)) wsMap.set(w.id, w);
     });
-    result.wsList = allWs;
+    result.wsList = Array.from(wsMap.values());
 
     // 2. Merge Data for each Workspace
-    const allIds = new Set([...Object.keys(local.data), ...Object.keys(remote.data)]);
+    const allIds = new Set([...Object.keys(local.data||{}), ...Object.keys(remote.data||{})]);
     allIds.forEach(id => {
-      const l = local.data[id] || App.def();
-      const r = remote.data[id] || App.def();
-      
+      const l = (local.data && local.data[id]) || App.def();
+      const r = (remote.data && remote.data[id]) || App.def();
+
       result.data[id] = {
         ...l,
         settings: (l.lastModified || 0) > (r.lastModified || 0) ? l.settings : r.settings,
@@ -718,43 +733,72 @@ const Cloud = {
 
 /* ── Workspace Manager ── */
 const WS={
-  list:[],activeId:null,
+  list:[],activeId:null,cache:{},
   COLORS:['#6366f1','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#06b6d4','#84cc16'],
-  async init(){
-    var s=await DB.get('wsList');
-    this.list=(s&&s.length)?s:[];
-    var aid=await DB.get('wsActive');
-    this.activeId=(aid&&this.list.find(w=>w.id===aid))?aid:(this.list[0]?this.list[0].id:null);
+
+  // visible (non-deleted) workspaces
+  visible(){ return this.list.filter(w=>!w.deleted); },
+
+  // Build the full package that gets pushed to Drive
+  buildPackage(){
+    if(this.activeId) this.cache[this.activeId] = App.state;
+    return { wsList: this.list, data: this.cache, lastModified: Date.now() };
   },
+  // Apply a (possibly merged) package into memory and refresh UI if needed
+  applyPackage(pkg){
+    this.list = pkg.wsList || [];
+    this.cache = pkg.data || {};
+    if(!this.activeId || !this.list.find(w=>w.id===this.activeId&&!w.deleted)){
+      var firstVisible = this.visible()[0];
+      this.activeId = firstVisible ? firstVisible.id : null;
+    }
+    if(App.focId || App.modOpen){
+      // Don't clobber an in-progress edit — keep local state as the source of truth for now,
+      // it will be pushed on save/close and picked up by the next sync cycle.
+      if(this.activeId) this.cache[this.activeId] = App.state;
+      return;
+    }
+    App.state = this.activeId ? (this.cache[this.activeId] || App.def()) : App.def();
+    this.render();
+    App.render();
+  },
+
   async loadActive(){
-    if(!this.activeId){App.state=App.def();return;}
-    var d=await DB.get('wsData_'+this.activeId);
-    App.state=d?{...App.def(),...d}:App.def();
+    App.state = this.activeId ? (this.cache[this.activeId] || App.def()) : App.def();
   },
-  async saveActive(){
-    App.state.lastModified = Date.now();
-    await DB.set('wsData_'+this.activeId,App.state);
-    await DB.set('wsActive',this.activeId);
+  saveActive(){
+    if(!this.activeId) return;
+    this.cache[this.activeId] = App.state;
+    Cloud.pushDebounced();
   },
   async switchTo(id){
     if(id===this.activeId)return;
-    await this.saveActive();
-    this.activeId=id;await DB.set('wsActive',id);await this.loadActive();
+    this.saveActive();
+    this.activeId=id;await this.loadActive();
     App.currentView='dashboard';App.q='';App.focId=null;App.modOpen=false;
     App.dbF={client:'',status:'',startDate:null,endDate:null,useSD:false,useED:false};
     App.undoStack=[];App.applyTheme();this.render();App.render();
   },
-  async create(name,color){var id=U.uid();this.list.push({id,name,color});await DB.set('wsList',this.list);await this.switchTo(id);},
-  async rename(id,name){var w=this.list.find(w=>w.id===id);if(w){w.name=name;await DB.set('wsList',this.list);}this.render();},
-  async recolor(id,color){var w=this.list.find(w=>w.id===id);if(w){w.color=color;await DB.set('wsList',this.list);}this.render();},
+  async create(name,color){
+    var id=U.uid();
+    this.list.push({id,name,color,lastModified:Date.now()});
+    this.cache[id]=App.def();
+    await this.switchTo(id);
+    Cloud.pushDebounced(true);
+  },
+  rename(id,name){var w=this.list.find(w=>w.id===id);if(w){w.name=name;w.lastModified=Date.now();}this.render();Cloud.pushDebounced(true);},
+  recolor(id,color){var w=this.list.find(w=>w.id===id);if(w){w.color=color;w.lastModified=Date.now();}this.render();Cloud.pushDebounced(true);},
   async remove(id){
-    if(this.list.length<=1){U.toast('Cannot delete the only workspace.');return;}
-    this.list=this.list.filter(w=>w.id!==id);await DB.set('wsList',this.list);
-    if(this.activeId===id)await this.switchTo(this.list[0].id);else this.render();
+    if(this.visible().length<=1){U.toast('Cannot delete the only workspace.');return;}
+    var w=this.list.find(w=>w.id===id);
+    if(w){w.deleted=true;w.lastModified=Date.now();}
+    delete this.cache[id];
+    if(this.activeId===id){var nxt=this.visible()[0];await this.switchTo(nxt.id);}else this.render();
+    Cloud.pushDebounced(true);
   },
   render(){
     var el=document.getElementById('wsList');if(!el)return;
-    el.innerHTML=this.list.map(w=>`<div class="ws-item ${w.id===this.activeId?'act':''}" onclick="WS.switchTo('${w.id}')" data-tip="${U.esc(w.name)}" title="${U.esc(w.name)}" oncontextmenu="event.preventDefault();WS.showEdit('${w.id}')"><span class="ws-dot" style="background:${w.color}"></span><span class="ws-nm">${U.esc(w.name)}</span></div>`).join('');
+    el.innerHTML=this.visible().map(w=>`<div class="ws-item ${w.id===this.activeId?'act':''}" onclick="WS.switchTo('${w.id}')" data-tip="${U.esc(w.name)}" title="${U.esc(w.name)}" oncontextmenu="event.preventDefault();WS.showEdit('${w.id}')"><span class="ws-dot" style="background:${w.color}"></span><span class="ws-nm">${U.esc(w.name)}</span></div>`).join('');
   },
   colorPills(sel,cls){return this.COLORS.map((c,i)=>`<div onclick="this.parentElement.querySelectorAll('.${cls}').forEach(p=>p.style.outline='');this.style.outline='2px solid #fff';window._wsc='${c}'" class="${cls} cdot" style="width:26px;height:26px;cursor:pointer;background:${c};border-radius:50%;${c===sel?'outline:2px solid #fff':''}"></div>`).join('');},
   showCreate(){
@@ -790,14 +834,63 @@ const App={
   def:()=>({notes:[],clients:[],settings:{theme:'saas',mode:'dark',fontSize:15,currency:'USD'},lastModified:0,dashFilter:'all_time'}),
 
   async init(){
-    Cloud.init();
-    await DB.init();
-    if(new URLSearchParams(location.search).has('reset')){await DB.set('wsList',null);await DB.set('wsActive',null);history.replaceState(null,'',location.pathname);}
-    await WS.init();await WS.loadActive();
-    this.sc=localStorage.getItem('nsc')==='1';this.applySC();
-    this.applyTheme();this.bindEvents();
+    document.getElementById('app').style.display='none';
+    if(!navigator.onLine){
+      document.getElementById('offline-overlay').classList.add('active');
+      return;
+    }
+    this.sc=localStorage.getItem('nsc')==='1';
+    this.bindEvents();
+    var safety=setTimeout(()=>{
+      if(document.getElementById('app').style.display==='none' && !document.getElementById('onboard')){
+        console.warn('Cloud init did not resolve in time — showing login gate as a fallback.');
+        this.showLoginGate();
+      }
+    },9000);
+    try{
+      await Cloud.init(); // will call App.showLoginGate() or App.startApp() depending on auth state
+    } finally {
+      clearTimeout(safety);
+    }
+  },
+
+  showLoginGate(){
+    document.getElementById('app').style.display='none';
+    if(document.getElementById('onboard'))return;
+    var g=document.createElement('div');
+    g.id='onboard';
+    g.style.cssText='position:fixed;inset:0;background:var(--bg,#0f172a);display:flex;align-items:center;justify-content:center;z-index:5000;padding:20px;color:#f1f5f9';
+    g.innerHTML=`<div style="max-width:360px;width:100%;text-align:center">
+      <div style="font-family:Georgia,serif;font-size:1.9rem;color:#6366f1;margin-bottom:8px">Nexus</div>
+      <p style="color:#94a3b8;margin-bottom:22px;font-size:.92rem">Sign in with Google to load your workspace. All data lives in your Drive — nothing is stored on this device. If sign-in doesn't respond, disable ad-blockers / browser shields for this page and reload.</p>
+      <button class="btn btn-p" style="width:100%;justify-content:center;height:42px" onclick="Cloud.login()">Sign in with Google</button>
+    </div>`;
+    document.body.appendChild(g);
+  },
+
+  async startApp(){
+    var g=document.getElementById('onboard');if(g)g.remove();
+    document.getElementById('offline-overlay').classList.remove('active');
+    document.getElementById('app').style.display='';
+    U.toast('Loading your data…');
+    try{
+      const fileId = await Cloud.getFileId();
+      const remote = fileId ? await Cloud.getFileContent(fileId) : null;
+      if(remote){ WS.list = remote.wsList||[]; WS.cache = remote.data||{}; }
+      else { WS.list = []; WS.cache = {}; }
+    }catch(e){
+      console.error(e);
+      U.toast('Could not load data from Drive.');
+      WS.list=[]; WS.cache={};
+    }
+    var vis = WS.visible();
+    WS.activeId = vis[0] ? vis[0].id : null;
+    await WS.loadActive();
+    this.applySC();
+    this.applyTheme();
     document.getElementById('er').style.display='none';
-    if(!WS.list.length){this.showOnboarding();return;}
+    Cloud.startPolling();
+    if(!vis.length){this.showOnboarding();return;}
     WS.render();
     try{this.render();}catch(e){console.error(e);this.currentView='dashboard';this.render();}
   },
@@ -807,7 +900,7 @@ const App={
     document.getElementById('app').style.display='none';
     var ob=document.createElement('div');
     ob.id='onboard';
-    ob.style.cssText='position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:5000;padding:20px';
+    ob.style.cssText='position:fixed;inset:0;background:var(--bg,#0f172a);display:flex;align-items:center;justify-content:center;z-index:5000;padding:20px';
     ob.innerHTML=`<div style="max-width:380px;width:100%;text-align:center">
       <div style="font-family:var(--font-heading);font-size:1.9rem;color:var(--ac);margin-bottom:6px">Nexus</div>
       <p style="color:var(--tx2);margin-bottom:22px;font-size:.92rem">Create your first workspace to get started.</p>
@@ -1211,14 +1304,22 @@ const V={
   noteCal(e,nid,key){
     e.stopPropagation();document.querySelectorAll('.nxcal').forEach(c=>c.remove());
     var r=e.target.closest('button').getBoundingClientRect(),cal=document.createElement('div');
-    cal.className='nxcal open';cal.style.top=(r.bottom+5)+'px';cal.style.left=r.left+'px';
+    cal.className='nxcal open';
     document.body.appendChild(cal);this.drawCal(cal,null,null,nid,key);
+    this.posCal(cal,r);
   },
   fCal(e,key){
     e.stopPropagation();document.querySelectorAll('.nxcal').forEach(c=>c.remove());
     var r=e.target.closest('button').getBoundingClientRect(),cal=document.createElement('div');
-    cal.className='nxcal open';cal.style.top=(r.bottom+5)+'px';cal.style.left=r.left+'px';
+    cal.className='nxcal open';
     document.body.appendChild(cal);this.drawCal(cal,key,null,null,null);
+    this.posCal(cal,r);
+  },
+  posCal(cal,r){
+    var cw=228,pad=8,vw=window.innerWidth,vh=window.innerHeight;
+    var left=r.left;if(left+cw+pad>vw)left=vw-cw-pad;if(left<pad)left=pad;
+    var ch=cal.offsetHeight||300,top=r.bottom+5;if(top+ch+pad>vh)top=r.top-ch-5;if(top<pad)top=pad;
+    cal.style.left=left+'px';cal.style.top=top+'px';
   },
   drawCal(container,fKey,_,nid,nKey){
     var cur=fKey?(App.dbF[fKey]?new Date(App.dbF[fKey]):new Date()):(nid?(App.state.notes.find(x=>x.id===nid)?.[nKey]?new Date(App.state.notes.find(x=>x.id===nid)[nKey]):new Date()):new Date());
