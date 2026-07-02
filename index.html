@@ -221,26 +221,46 @@ input[type="number"]{-moz-appearance:textfield}
 #offline-overlay h2 { font-size: 2rem; margin-bottom: 10px; }
 #offline-overlay p { color: #94a3b8; max-width: 400px; }
 
-/* print */
-@media screen{#pArea{display:none}}
+/* print / report */
+@media screen{#pArea{position:fixed;left:-9999px;top:0}}
+#pArea{width:794px;background:#fff;color:#0f172a;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;box-sizing:border-box}
+#pArea .prep{padding:56px 52px 40px}
+#pArea .p-brand{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px}
+#pArea .p-brand-l{font-family:Georgia,serif;font-size:26px;font-weight:bold;color:#0f172a}
+#pArea .p-brand-r{text-align:right;font-size:11px;color:#64748b;line-height:1.6}
+#pArea .p-title{font-size:13px;text-transform:uppercase;letter-spacing:1.5px;color:#6366f1;font-weight:700;margin:26px 0 4px}
+#pArea .p-sub{font-size:11px;color:#94a3b8;margin-bottom:24px}
+#pArea .p-stats{display:flex;gap:12px;margin-bottom:30px}
+#pArea .p-stat{flex:1;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px 16px}
+#pArea .p-stat-lbl{font-size:9px;text-transform:uppercase;letter-spacing:.6px;color:#94a3b8;margin-bottom:5px}
+#pArea .p-stat-val{font-size:19px;font-weight:700;color:#0f172a}
+#pArea .pt{width:100%;border-collapse:collapse}
+#pArea .pt thead th{text-align:left;font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;color:#fff;background:#0f172a;padding:10px 10px;font-weight:600}
+#pArea .pt thead th:first-child{border-radius:8px 0 0 8px}
+#pArea .pt thead th:last-child{border-radius:0 8px 8px 0}
+#pArea .pt tbody td{font-size:11.5px;color:#1e293b;padding:10px 10px;border-bottom:1px solid #eef1f5}
+#pArea .pt tbody tr:nth-child(even){background:#f8fafc}
+#pArea .p-status{display:inline-block;padding:2px 9px;border-radius:20px;font-size:9.5px;font-weight:600}
+#pArea .ptot{margin-top:18px;display:flex;justify-content:flex-end}
+#pArea .ptot-box{background:#0f172a;color:#fff;border-radius:10px;padding:14px 22px;text-align:right}
+#pArea .ptot-lbl{font-size:9.5px;text-transform:uppercase;letter-spacing:.6px;color:#94a3b8}
+#pArea .ptot-val{font-size:20px;font-weight:700;margin-top:2px}
+#pArea .pfoot{margin-top:44px;font-size:9.5px;color:#94a3b8;text-align:center;border-top:1px solid #eef1f5;padding-top:14px}
 @media print{
   body *{visibility:hidden}
   #pArea,#pArea *{visibility:visible}
-  #pArea{display:block!important;position:absolute;left:0;top:0;width:100%;color:#000!important;background:#fff!important;padding:34px;font-family:sans-serif}
-  .ph{margin-bottom:24px;border-bottom:2px solid #000;padding-bottom:11px}
-  .ph h1{font-size:22px;margin:0;color:#000!important}
-  .pt{width:100%;border-collapse:collapse;margin-top:14px}
-  .pt th{text-align:left;font-size:11px;text-transform:uppercase;color:#444!important;border-bottom:1px solid #ddd;padding:8px 6px}
-  .pt td{font-size:12px;color:#000!important;border-bottom:1px solid #eee;padding:9px 6px}
-  .ptot{margin-top:14px;text-align:right;font-size:14px;font-weight:bold}
-  .pfoot{margin-top:36px;font-size:11px;color:#666!important;text-align:center;border-top:1px solid #eee;padding-top:12px}
+  #pArea{position:absolute!important;left:0;top:0;width:100%}
+  .prep{padding:34px}
 }
 
 /* ════ MOBILE ════ */
 @media(max-width:768px){
   :root{--hh:50px}
   .app{grid-template-columns:1fr!important;grid-template-rows:var(--hh) 1fr 60px;grid-template-areas:"hdr""main""bnav"}
-  aside{display:none!important}
+  aside{position:fixed;top:0;left:0;bottom:0;width:250px;z-index:1500;transform:translateX(-100%);transition:transform .25s ease;background:var(--bg2);backdrop-filter:none!important;-webkit-backdrop-filter:none!important;box-shadow:none}
+  .app.mnav aside{transform:translateX(0);box-shadow:20px 0 40px rgba(0,0,0,.35)}
+  #mnavScrim{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:1400}
+  .app.mnav #mnavScrim{display:block}
   main{padding:12px;height:calc(100vh - var(--hh) - 60px);overflow-y:auto}
   .logo{opacity:1!important;max-width:120px!important}
   .search-bar{max-width:none}
@@ -257,8 +277,6 @@ input[type="number"]{-moz-appearance:textfield}
   @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
   #sbt { display: none !important; }
   #mbt { display: flex !important; }
-  .app.sc aside { transform: translateX(-100%); width: 0; }
-  .app:not(.sc) aside { transform: translateX(0); width: 240px; position: fixed; height: 100%; z-index: 1000; box-shadow: 20px 0 50px rgba(0,0,0,0.3); }
   .hdr-end .ib{display:none}
   .view-hdr{flex-direction:row;justify-content: space-between;align-items:center; gap: 10px; margin-bottom: 15px;}
   .view-hdr h1 { font-size: 1.2rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -370,6 +388,7 @@ input[type="number"]{-moz-appearance:textfield}
     </div>
   </aside>
 
+  <div id="mnavScrim" onclick="App.closeMNav()"></div>
   <main id="main"></main>
 
   <nav class="bnav" id="bnav">
@@ -392,6 +411,7 @@ input[type="number"]{-moz-appearance:textfield}
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://apis.google.com/js/api.js" async defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer></script>
 
 <script>
 function NexusReset(){localStorage.clear();var done=false;function go(){if(!done){done=true;location.href=location.pathname;}}try{var r=indexedDB.open('NexusV2',1);r.onsuccess=function(e){try{var db=e.target.result,tx=db.transaction('s','readwrite');tx.objectStore('s').clear();tx.oncomplete=go;tx.onerror=go;}catch(ex){go();}};r.onerror=go;setTimeout(go,2000);}catch(e){go();}}
@@ -702,12 +722,12 @@ const WS={
   COLORS:['#6366f1','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#06b6d4','#84cc16'],
   async init(){
     var s=await DB.get('wsList');
-    if(s&&s.length){this.list=s;}
-    else{var id=U.uid();this.list=[{id,name:'My Workspace',color:this.COLORS[0]}];await DB.set('wsList',this.list);}
+    this.list=(s&&s.length)?s:[];
     var aid=await DB.get('wsActive');
-    this.activeId=(aid&&this.list.find(w=>w.id===aid))?aid:this.list[0].id;
+    this.activeId=(aid&&this.list.find(w=>w.id===aid))?aid:(this.list[0]?this.list[0].id:null);
   },
   async loadActive(){
+    if(!this.activeId){App.state=App.def();return;}
     var d=await DB.get('wsData_'+this.activeId);
     App.state=d?{...App.def(),...d}:App.def();
   },
@@ -777,14 +797,39 @@ const App={
     this.sc=localStorage.getItem('nsc')==='1';this.applySC();
     this.applyTheme();this.bindEvents();
     document.getElementById('er').style.display='none';
+    if(!WS.list.length){this.showOnboarding();return;}
     WS.render();
     try{this.render();}catch(e){console.error(e);this.currentView='dashboard';this.render();}
   },
 
+  showOnboarding(){
+    window._wsc=WS.COLORS[0];
+    document.getElementById('app').style.display='none';
+    var ob=document.createElement('div');
+    ob.id='onboard';
+    ob.style.cssText='position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:5000;padding:20px';
+    ob.innerHTML=`<div style="max-width:380px;width:100%;text-align:center">
+      <div style="font-family:var(--font-heading);font-size:1.9rem;color:var(--ac);margin-bottom:6px">Nexus</div>
+      <p style="color:var(--tx2);margin-bottom:22px;font-size:.92rem">Create your first workspace to get started.</p>
+      <input class="inp" id="obN" placeholder="Workspace name, e.g. Freelance Work" style="margin-bottom:14px;text-align:center" autofocus>
+      <div style="display:flex;gap:7px;flex-wrap:wrap;justify-content:center;margin-bottom:20px">${WS.colorPills(WS.COLORS[0],'obcp')}</div>
+      <button class="btn btn-p" style="width:100%" onclick="App.finishOnboarding()">Create Workspace</button>
+    </div>`;
+    document.body.appendChild(ob);
+    document.getElementById('obN').addEventListener('keydown',e=>{if(e.key==='Enter')App.finishOnboarding();});
+  },
+  async finishOnboarding(){
+    var n=document.getElementById('obN').value.trim();
+    if(!n){U.toast('Enter a workspace name');return;}
+    var ob=document.getElementById('onboard');if(ob)ob.remove();
+    document.getElementById('app').style.display='';
+    await WS.create(n,window._wsc||WS.COLORS[0]);
+  },
+
   bindEvents(){
     document.getElementById('sbt').addEventListener('click',()=>{this.sc=!this.sc;localStorage.setItem('nsc',this.sc?'1':'0');this.applySC();});
-    document.getElementById('mbt').addEventListener('click',()=>{this.sc=!this.sc;this.applySC();});
-    document.querySelectorAll('.nav-item[data-view]').forEach(el=>{el.addEventListener('click',()=>{this.nav(el.dataset.view);});});
+    document.getElementById('mbt').addEventListener('click',()=>{document.getElementById('app').classList.toggle('mnav');});
+    document.querySelectorAll('.nav-item[data-view]').forEach(el=>{el.addEventListener('click',()=>{this.nav(el.dataset.view);this.closeMNav();});});
     document.querySelectorAll('.bni[data-view]').forEach(el=>{el.addEventListener('click',()=>{this.nav(el.dataset.view);});});
     document.getElementById('searchInput').addEventListener('input',U.dbnc(e=>{this.q=e.target.value.toLowerCase();this.render();},260));
     document.getElementById('fo').addEventListener('click',e=>{if(e.target.id==='fo')this.cancelAndClose();});
@@ -798,6 +843,8 @@ const App={
     document.querySelectorAll(`[data-view="${view}"]`).forEach(n=>n.classList.add('act'));
     this.render();
   },
+
+  closeMNav(){document.getElementById('app').classList.remove('mnav');},
 
   applySC(){
     var app=document.getElementById('app'),i=document.getElementById('sbi');
@@ -853,10 +900,9 @@ const App={
     if (this.focId && this._tempNote) {
       const idx = this.state.notes.findIndex(x => x.id === this.focId);
       if (idx !== -1) {
-        // If it was a brand new note that wasn't saved, we might want to remove it.
-        // But for simplicity, we just revert.
         this.state.notes[idx] = this._tempNote;
       }
+      this.save();
     }
     this.focId=null;
     this.modOpen=false;
@@ -928,10 +974,10 @@ const V={
       <div class="nxdd" style="width:130px" id="ddF"><div class="nxdt" onclick="V.dd('ddFm',this)"><span>${f==='all_time'?'All Time':'This Month'}</span><svg class="ic" style="width:13px;height:13px"><use href="#ic-chev"/></svg></div>
       <div class="nxdm" id="ddFm"><div class="nxdi" onclick="App.state.dashFilter='all_time';App.render()">All Time</div><div class="nxdi" onclick="App.state.dashFilter='this_month';App.render()">This Month</div></div></div></div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:18px 0">
-        <div class="card" style="border-left:4px solid #f59e0b"><div style="color:var(--tx2);font-size:.75rem;text-transform:uppercase">Pending Videos</div><div style="font-size:1.9rem;font-weight:bold">${stats.pv}</div></div>
-        <div class="card" style="border-left:4px solid #10b981"><div style="color:var(--tx2);font-size:.75rem;text-transform:uppercase">Completed</div><div style="font-size:1.9rem;font-weight:bold">${stats.cv}</div></div>
-        <div class="card" style="border-left:4px solid #6366f1"><div style="color:var(--tx2);font-size:.75rem;text-transform:uppercase">Earned</div><div style="font-size:1.9rem;font-weight:bold">${U.cur(stats.earned)}</div></div>
-        <div class="card" style="border-left:4px solid #ef4444"><div style="color:var(--tx2);font-size:.75rem;text-transform:uppercase">Pending Amount</div><div style="font-size:1.9rem;font-weight:bold">${U.cur(stats.pending)}</div></div>
+        <div class="card" style="border-left:4px solid #f59e0b" onclick="V.statDetail('pv')"><div style="color:var(--tx2);font-size:.75rem;text-transform:uppercase">Pending Videos</div><div style="font-size:1.9rem;font-weight:bold">${stats.pv}</div></div>
+        <div class="card" style="border-left:4px solid #10b981" onclick="V.statDetail('cv')"><div style="color:var(--tx2);font-size:.75rem;text-transform:uppercase">Completed</div><div style="font-size:1.9rem;font-weight:bold">${stats.cv}</div></div>
+        <div class="card" style="border-left:4px solid #6366f1" onclick="V.statDetail('earned')"><div style="color:var(--tx2);font-size:.75rem;text-transform:uppercase">Earned</div><div style="font-size:1.9rem;font-weight:bold">${U.cur(stats.earned)}</div></div>
+        <div class="card" style="border-left:4px solid #ef4444" onclick="V.statDetail('pending')"><div style="color:var(--tx2);font-size:.75rem;text-transform:uppercase">Pending Amount</div><div style="font-size:1.9rem;font-weight:bold">${U.cur(stats.pending)}</div></div>
       </div>
       <h2>Recent</h2>
       <div class="ng">${this.cards(App.state.notes.filter(n=>!n.archived&&(n.type==='standard'||n.type==='kanban')).slice(0,8))}</div>`;
@@ -992,7 +1038,7 @@ const V={
       return{...c,tv:ct.reduce((s,t)=>s+(t.videos||0),0),cr,pr,last:ct.filter(t=>t.completedDate).sort((a,b)=>b.completedDate-a.completedDate)[0]?.completedDate||null};
     }).filter(c=>c.tv>0||c.cr>0||c.pr>0);
     var sd=f.startDate?new Date(f.startDate).toLocaleDateString():'N/A',ed=f.endDate?new Date(f.endDate).toLocaleDateString():'N/A';
-    m.innerHTML=`<div class="view-hdr"><h1>Client Database</h1><div style="display:flex;gap:7px;flex-wrap:wrap"><button class="btn" onclick="U.dl('clients.csv',V.csv(),'text/csv')">CSV</button><button class="btn" onclick="V.pdf()">PDF</button></div></div>
+    m.innerHTML=`<div class="view-hdr"><h1>Client Database</h1><div style="display:flex;gap:7px;flex-wrap:wrap"><button class="btn" onclick="U.dl('clients.csv',V.csv(),'text/csv')">CSV</button><button class="btn" onclick="V.buildReport();V.png()">PNG</button><button class="btn btn-p" onclick="V.pdf()">PDF</button></div></div>
       <div class="dbf">
         <input type="text" class="inp" placeholder="Search…" value="${f.text||''}" oninput="App.dbF.text=this.value.toLowerCase();App.render()" style="flex:1;min-width:90px">
         <div class="nxdd" style="width:130px"><div class="nxdt" onclick="V.dd('dbCM',this)"><span>${App.state.clients.find(c=>c.id===f.client)?.name||'All Clients'}</span><svg class="ic" style="width:13px;height:13px"><use href="#ic-chev"/></svg></div><div class="nxdm" id="dbCM"><div class="nxdi" onclick="App.dbF.client='';App.render()">All Clients</div>${App.state.clients.map(c=>`<div class="nxdi" onclick="App.dbF.client='${c.id}';App.render()">${c.name}</div>`).join('')}</div></div>
@@ -1053,7 +1099,7 @@ const V={
       var disabled = !n.clientId ? 'disabled style="opacity:0.5"' : '';
       flds=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
         <div class="nxdd" id="kSt"><div class="nxdt" onclick="V.dd('kStM',this)"><span>${n.status||'Pending'}</span><svg class="ic" style="width:12px;height:12px"><use href="#ic-chev"/></svg></div></div>
-        <div class="ig"><input class="inp" list="cL" placeholder="Select Client (Mandatory)" value="${cl?.name||''}" onchange="App.handleClient('${n.id}',this.value)"><datalist id="cL">${App.state.clients.map(c=>`<option value="${c.name}">`).join('')}</datalist></div>
+        <div class="nxdd" id="kCl"><div class="nxdt" onclick="V.dd('kClM',this)"><span>${cl?`<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${cl.color};margin-right:6px"></span>${U.esc(cl.name)}`:'Select Client'}</span><svg class="ic" style="width:12px;height:12px"><use href="#ic-chev"/></svg></div></div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
         <div class="ig"><span class="ii"><svg class="ic" style="width:12px;height:12px"><use href="#ic-vid"/></svg></span><input type="number" class="inp iwi" placeholder="Videos" value="${n.videos||0}" oninput="App.upNote('${n.id}','videos',parseInt(this.value)||0)" ${disabled}></div>
@@ -1064,7 +1110,13 @@ const V={
         <button class="btn" style="justify-content:flex-start;font-size:.82rem" data-cal onclick="V.noteCal(event,'${n.id}','receivedDate')" ${disabled}><svg class="ic" style="width:12px;height:12px;margin-right:3px"><use href="#ic-cal"/></svg>Recv: ${U.fmtDate(n.receivedDate)}</button>
         <button class="btn" style="justify-content:flex-start;font-size:.82rem" ${n.status!=='Completed' || !n.clientId ? 'disabled style="opacity:0.5"' : ''} data-cal onclick="${n.status==='Completed'?`V.noteCal(event,'${n.id}','completedDate')`:`U.toast('Mark as Completed first')`}"><svg class="ic" style="width:12px;height:12px;margin-right:3px"><use href="#ic-cal"/></svg>Done: ${U.fmtDate(n.completedDate)}</button>
       </div>`;
-      setTimeout(()=>{if(document.getElementById('kSt')){document.getElementById('kSt').insertAdjacentHTML('beforeend',`<div class="nxdm" id="kStM">${['Pending','In Progress','Revision','Completed'].map(s=>`<div class="nxdi" onclick="App.setStatus('${n.id}','${s}');V.focCard()">${s}</div>`).join('')}</div>`);document.getElementById('kPr').insertAdjacentHTML('beforeend',`<div class="nxdm" id="kPrM"><div class="nxdi" onclick="App.upNote('${n.id}','pricingType','total');V.focCard()">Total</div><div class="nxdi" onclick="App.upNote('${n.id}','pricingType','per_video');V.focCard()">Per Video</div></div>`);}},0);
+      setTimeout(()=>{if(document.getElementById('kSt')){document.getElementById('kSt').insertAdjacentHTML('beforeend',`<div class="nxdm" id="kStM">${['Pending','In Progress','Revision','Completed'].map(s=>`<div class="nxdi" onclick="App.setStatus('${n.id}','${s}');V.focCard()">${s}</div>`).join('')}</div>`);document.getElementById('kPr').insertAdjacentHTML('beforeend',`<div class="nxdm" id="kPrM"><div class="nxdi" onclick="App.upNote('${n.id}','pricingType','total');V.focCard()">Total</div><div class="nxdi" onclick="App.upNote('${n.id}','pricingType','per_video');V.focCard()">Per Video</div></div>`);}
+        if(document.getElementById('kCl')){document.getElementById('kCl').insertAdjacentHTML('beforeend',`<div class="nxdm" id="kClM" style="padding:4px">
+          <input class="inp" id="kClSearch" placeholder="Search or type new name…" style="margin:4px;width:calc(100% - 8px);height:32px" oninput="V.filterClientDD(this.value)" onclick="event.stopPropagation()">
+          <div id="kClOpts">${App.state.clients.map(c=>`<div class="nxdi" data-cname="${U.esc(c.name).toLowerCase()}" onclick="App.handleClient('${n.id}','${U.esc(c.name).replace(/'/g,"\\'")}');V.focCard()"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${c.color};margin-right:6px"></span>${U.esc(c.name)}</div>`).join('')}</div>
+          <div id="kClAddNew" style="display:none;padding:7px 11px;cursor:pointer;color:var(--ac);font-size:.84rem;border-top:1px solid var(--bd)" onclick="V.addNewClientFromDD('${n.id}')"></div>
+        </div>`);}
+      },0);
       cont=`<div class="ec" contenteditable="true" oninput="App.upNote('${n.id}','content',this.innerHTML)" ${disabled}>${n.content||''}</div>`;
     } else if(n.isChecklist){
       cont=`<div style="margin-top:8px">${n.items.map((it,i)=>`<div class="cli"><input type="checkbox" class="nxc" ${it.done?'checked':''} onchange="App.togCLI('${n.id}',${i},this.checked)"><input class="clt ${it.done?'done':''}" value="${U.esc(it.text)}" oninput="App.updCLI('${n.id}',${i},this.value)" placeholder="Item"><button class="ib" style="color:#ef4444" onclick="App.delCLI('${n.id}',${i})"><svg class="ic" style="width:13px;height:13px"><use href="#ic-tr"/></svg></button></div>`).join('')}<button class="btn" onclick="App.addCLI('${n.id}')" style="margin-top:5px">+ Add Item</button></div>`;
@@ -1101,6 +1153,28 @@ const V={
         <div class="cpp" id="fmtP" style="right:54px;grid-template-columns:1fr"><button class="ib" onclick="document.execCommand('bold')"><svg class="ic"><use href="#ic-bold"/></svg></button><button class="ib" onclick="document.execCommand('italic')"><svg class="ic"><use href="#ic-ital"/></svg></button></div>`:''}`;
   },
 
+  statDetail(kind){
+    var f=App.state.dashFilter||'all_time',b=U.monthBounds(),tasks=App.state.notes.filter(n=>n.type==='kanban'&&!n.archived);
+    var cfg={
+      pv:{title:'Pending Videos',color:'#f59e0b',list:tasks.filter(t=>t.status!=='Completed')},
+      cv:{title:'Completed Videos',color:'#10b981',list:tasks.filter(t=>t.status==='Completed'&&(f==='all_time'||(t.completedDate&&t.completedDate>=b.s&&t.completedDate<=b.e)))},
+      earned:{title:'Earned',color:'#6366f1',list:tasks.filter(t=>t.status==='Completed'&&(f==='all_time'||(t.completedDate&&t.completedDate>=b.s&&t.completedDate<=b.e)))},
+      pending:{title:'Pending Amount',color:'#ef4444',list:tasks.filter(t=>t.status!=='Completed')}
+    }[kind];
+    var rows=cfg.list.slice(0,25).map(t=>{
+      var cl=App.state.clients.find(c=>c.id===t.clientId);
+      return`<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--bd)">
+        <div><div style="font-weight:500;font-size:.88rem">${U.esc(t.title)||'Untitled'}</div><div style="font-size:.76rem;color:var(--tx2)">${cl?cl.name:'No Client'} · ${t.videos||0} videos</div></div>
+        <div style="font-size:.85rem;font-weight:600;color:${cfg.color}">${U.cur(App.calcRev(t))}</div>
+      </div>`;
+    }).join('')||`<p style="color:var(--tx2);padding:14px 0;text-align:center">Nothing here yet.</p>`;
+    App.modal(`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <h3 style="color:${cfg.color}">${cfg.title}</h3>
+        <button class="ib" onclick="App.close()"><svg class="ic"><use href="#ic-x"/></svg></button>
+      </div>
+      <div style="max-height:50vh;overflow-y:auto">${rows}</div>`);
+  },
+
   manClients(){
     var cs=App.state.settings.currency==='INR'?'₹':'$';
     App.modal(`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:13px"><h3>Manage Clients</h3><button class="ib" onclick="App.close()"><svg class="ic"><use href="#ic-x"/></svg></button></div>
@@ -1119,7 +1193,20 @@ const V={
       <button class="btn btn-p" style="margin-top:11px;width:100%" onclick="App.state.clients.push({id:U.uid(),name:'New Client',color:'#6366f1',company:'',email:'',paymentType:'per_video',monthlySalary:0});App.save();V.manClients()">+ Add Client</button>`);
   },
 
-  dd(id,_t){var m=document.getElementById(id);if(!m)return;var o=m.classList.contains('open');document.querySelectorAll('.nxdm.open').forEach(x=>x.classList.remove('open'));if(!o)m.classList.add('open');},
+  dd(id,_t){var m=document.getElementById(id);if(!m)return;var o=m.classList.contains('open');document.querySelectorAll('.nxdm.open').forEach(x=>x.classList.remove('open'));if(!o){m.classList.add('open');var s=m.querySelector('#kClSearch');if(s)setTimeout(()=>s.focus(),0);}},
+
+  filterClientDD(val){
+    var q=val.toLowerCase().trim(),any=false;
+    document.querySelectorAll('#kClOpts .nxdi').forEach(el=>{var match=el.dataset.cname.includes(q);el.style.display=match?'':'none';if(match)any=true;});
+    var addEl=document.getElementById('kClAddNew');
+    if(q&&!document.querySelector(`#kClOpts .nxdi[data-cname="${q}"]`)){addEl.style.display='block';addEl.textContent='+ Add new client "'+val.trim()+'"';addEl.dataset.name=val.trim();}
+    else{addEl.style.display='none';}
+  },
+  addNewClientFromDD(nid){
+    var name=document.getElementById('kClAddNew').dataset.name;
+    if(!name)return;
+    App.handleClient(nid,name);V.focCard();
+  },
 
   noteCal(e,nid,key){
     e.stopPropagation();document.querySelectorAll('.nxcal').forEach(c=>c.remove());
@@ -1159,15 +1246,47 @@ const V={
     return[h.join(','),...rows].join('\n');
   },
 
-  pdf(){
+  buildReport(){
     var ts=App.state.notes.filter(n=>n.type==='kanban'&&!n.archived);var f=App.dbF;
     if(f.client)ts=ts.filter(t=>t.clientId===f.client);if(f.status)ts=ts.filter(t=>t.status===f.status);
     if(f.useSD&&f.startDate)ts=ts.filter(t=>t.completedDate&&t.completedDate>=f.startDate);
     if(f.useED&&f.endDate)ts=ts.filter(t=>t.completedDate&&t.completedDate<=f.endDate+86400000);
-    var total=0;ts.forEach(t=>{var c=App.state.clients.find(x=>x.id===t.clientId);if(!c||c.paymentType!=='monthly')total+=App.calcRev(t);});
+    var total=0,doneCount=0,pendingCount=0,videos=0;
+    ts.forEach(t=>{videos+=(t.videos||0);if(t.status==='Completed')doneCount++;else pendingCount++;var c=App.state.clients.find(x=>x.id===t.clientId);if(!c||c.paymentType!=='monthly')total+=App.calcRev(t);});
     App.state.clients.filter(c=>c.paymentType==='monthly').forEach(c=>{var ct=ts.filter(t=>t.clientId===c.id&&t.status==='Completed'&&t.completedDate);var ms=new Set(ct.map(t=>{var d=new Date(t.completedDate);return d.getMonth()+'_'+d.getFullYear();}));total+=ms.size*(c.monthlySalary||0);});
-    document.getElementById('pArea').innerHTML=`<div class="ph"><h1>Work Report</h1><p>Generated ${new Date().toLocaleDateString()}</p></div><table class="pt"><thead><tr><th>Date</th><th>Project</th><th>Client</th><th>Status</th><th>Videos</th><th>Amount</th></tr></thead><tbody>${ts.map(t=>{var c=App.state.clients.find(x=>x.id===t.clientId);var r=c&&c.paymentType==='monthly'?'Monthly':U.cur(App.calcRev(t));return`<tr><td>${U.fmtDate(t.completedDate||t.receivedDate)}</td><td>${U.esc(t.title)}</td><td>${c?c.name:'N/A'}</td><td>${t.status}</td><td>${t.videos||0}</td><td>${r}</td></tr>`;}).join('')}</tbody></table><div class="ptot">Total: ${U.cur(total)}</div><div class="pfoot">Nexus Workspace</div>`;
-    window.print();
+    var statusColor={'Completed':'#10b981','Pending':'#f59e0b','In Progress':'#6366f1','Revision':'#ef4444'};
+    var ws=WS.list.find(w=>w.id===WS.activeId);
+    document.getElementById('pArea').innerHTML=`<div class="prep">
+      <div class="p-brand"><div class="p-brand-l">Nexus</div><div class="p-brand-r">${U.esc(ws?.name||'')}<br>${new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'})}</div></div>
+      <div class="p-title">Work Report</div>
+      <div class="p-sub">${ts.length} project${ts.length!==1?'s':''} · generated automatically</div>
+      <div class="p-stats">
+        <div class="p-stat"><div class="p-stat-lbl">Total Videos</div><div class="p-stat-val">${videos}</div></div>
+        <div class="p-stat"><div class="p-stat-lbl">Completed</div><div class="p-stat-val">${doneCount}</div></div>
+        <div class="p-stat"><div class="p-stat-lbl">Pending</div><div class="p-stat-val">${pendingCount}</div></div>
+      </div>
+      <table class="pt"><thead><tr><th>Date</th><th>Project</th><th>Client</th><th>Status</th><th>Videos</th><th style="text-align:right">Amount</th></tr></thead><tbody>${ts.map(t=>{var c=App.state.clients.find(x=>x.id===t.clientId);var r=c&&c.paymentType==='monthly'?'Monthly':U.cur(App.calcRev(t));var sc=statusColor[t.status]||'#94a3b8';return`<tr><td>${U.fmtDate(t.completedDate||t.receivedDate)}</td><td>${U.esc(t.title)||'Untitled'}</td><td>${c?U.esc(c.name):'N/A'}</td><td><span class="p-status" style="background:${sc}22;color:${sc}">${t.status}</span></td><td>${t.videos||0}</td><td style="text-align:right">${r}</td></tr>`;}).join('')}</tbody></table>
+      <div class="ptot"><div class="ptot-box"><div class="ptot-lbl">Total Value</div><div class="ptot-val">${U.cur(total)}</div></div></div>
+      <div class="pfoot">Generated by Nexus Workspace</div>
+    </div>`;
+  },
+
+  pdf(){
+    this.buildReport();
+    setTimeout(()=>window.print(),50);
+  },
+
+  async png(){
+    if(typeof html2canvas==='undefined'){U.toast('PNG export loading, try again in a moment…');return;}
+    U.toast('Generating PNG…');
+    var el=document.querySelector('#pArea .prep');
+    try{
+      var canvas=await html2canvas(el,{scale:2,backgroundColor:'#ffffff',useCORS:true});
+      canvas.toBlob(blob=>{
+        var a=Object.assign(document.createElement('a'),{href:URL.createObjectURL(blob),download:'nexus_report.png'});
+        a.click();URL.revokeObjectURL(a.href);U.toast('Downloaded nexus_report.png');
+      });
+    }catch(e){console.error(e);U.toast('PNG export failed.');}
   },
 
   dnd(){
